@@ -2,6 +2,7 @@ import * as crypto from "crypto";
 import { AuditLogEntry } from "../auditLog";
 import { WebhookEventType, WebhookPayload, WebhookDeliveryResult } from "./types";
 import { getSubscribersForEvent } from "./webhookRegistry";
+import { assertSafeWebhookUrl } from "../security/urlPolicy";
 
 export function generateSignature(payload: string, secret: string): string {
   return crypto
@@ -26,6 +27,20 @@ async function deliverWebhookToSubscriber(
 
   let lastError: string | null = null;
   let httpStatus: number | null = null;
+
+  try {
+    await assertSafeWebhookUrl(url);
+  } catch (error) {
+    return {
+      subscriberId,
+      url,
+      eventType,
+      status: "failed",
+      httpStatus: null,
+      attempts: 0,
+      lastError: error instanceof Error ? error.message : "Unsafe webhook URL"
+    };
+  }
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
@@ -60,7 +75,7 @@ async function deliverWebhookToSubscriber(
 
       // Retry with backoff if not the last attempt
       if (attempt < maxAttempts - 1) {
-        await delay(backoffDelays[attempt]);
+        await delay(backoffDelays[attempt] ?? 0);
       }
 
     } catch (error) {
@@ -68,7 +83,7 @@ async function deliverWebhookToSubscriber(
 
       // Retry with backoff if not the last attempt
       if (attempt < maxAttempts - 1) {
-        await delay(backoffDelays[attempt]);
+        await delay(backoffDelays[attempt] ?? 0);
       }
     }
   }

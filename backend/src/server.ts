@@ -44,9 +44,31 @@ import {
   handleInboundRollback,
   handleInboundApprovalCheck
 } from "./webhooks/inboundHandler";
+import {
+  validateVersionExists,
+  validateEnvironment,
+  successResponse,
+  errorResponse
+} from "./apiHelpers";
+import { validateRuntimeConfig } from "./config";
+import { requireAdminAuth } from "./middleware/auth";
+import { assertSafeWebhookUrl } from "./security/urlPolicy";
+import { WebhookSubscriber } from "./webhooks/types";
 
 const app = express();
 app.use(express.json());
+
+validateRuntimeConfig();
+
+type VersionParams = { versionId: string };
+type VersionEnvironmentParams = { versionId: string; environment: string };
+type RollbackParams = { environment: string; targetVersionId: string };
+type WebhookIdParams = { id: string };
+
+function redactSubscriber(subscriber: WebhookSubscriber): Omit<WebhookSubscriber, "secret"> {
+  const { secret: _secret, ...safeSubscriber } = subscriber;
+  return safeSubscriber;
+}
 
 app.get("/health", (_req, res) => {
   res.json({
@@ -223,45 +245,35 @@ app.get("/versions/:versionId/policy-checks/summary", (req, res) => {
 // Approval route
 
 app.get("/versions/:versionId/approval", (req, res) => {
-  const { versionId } = req.params;
-  const version = getVersionById(versionId);
+  const { versionId } = req.params as VersionParams;
 
-  if (!version) {
-    res.status(404).json({
-      success: false,
-      message: `Version with ID '${versionId}' not found.`
-    });
+  // Validate version exists
+  const validation = validateVersionExists(versionId);
+  if (!validation.found) {
+    res.status(validation.statusCode).json(validation.response);
     return;
   }
 
   // GET route is read-only - don't log evaluation to audit
   const approvalResult = evaluateVersionForApproval(versionId, false);
-  res.json({
-    success: true,
-    data: approvalResult
-  });
+  res.json(successResponse(approvalResult));
 });
 
 // Promotion route
 
 app.get("/versions/:versionId/promotion/:environment", (req, res) => {
-  const { versionId, environment } = req.params;
+  const { versionId, environment } = req.params as VersionEnvironmentParams;
 
-  if (environment !== "staging" && environment !== "production") {
-    res.status(400).json({
-      success: false,
-      message: `Invalid environment '${environment}'. Must be 'staging' or 'production'.`
-    });
+  // Validate inputs
+  const envValidation = validateEnvironment(environment);
+  if (!envValidation.found) {
+    res.status(envValidation.statusCode).json(envValidation.response);
     return;
   }
 
-  const version = getVersionById(versionId);
-
-  if (!version) {
-    res.status(404).json({
-      success: false,
-      message: `Version with ID '${versionId}' not found.`
-    });
+  const versionValidation = validateVersionExists(versionId);
+  if (!versionValidation.found) {
+    res.status(versionValidation.statusCode).json(versionValidation.response);
     return;
   }
 
@@ -272,30 +284,22 @@ app.get("/versions/:versionId/promotion/:environment", (req, res) => {
     false
   );
 
-  res.json({
-    success: true,
-    data: promotionResult
-  });
+  res.json(successResponse(promotionResult));
 });
 
-app.post("/versions/:versionId/promotion/:environment", (req, res) => {
-  const { versionId, environment } = req.params;
+app.post("/versions/:versionId/promotion/:environment", requireAdminAuth, (req, res) => {
+  const { versionId, environment } = req.params as VersionEnvironmentParams;
 
-  if (environment !== "staging" && environment !== "production") {
-    res.status(400).json({
-      success: false,
-      message: `Invalid environment '${environment}'. Must be 'staging' or 'production'.`
-    });
+  // Validate inputs
+  const envValidation = validateEnvironment(environment);
+  if (!envValidation.found) {
+    res.status(envValidation.statusCode).json(envValidation.response);
     return;
   }
 
-  const version = getVersionById(versionId);
-
-  if (!version) {
-    res.status(404).json({
-      success: false,
-      message: `Version with ID '${versionId}' not found.`
-    });
+  const versionValidation = validateVersionExists(versionId);
+  if (!versionValidation.found) {
+    res.status(versionValidation.statusCode).json(versionValidation.response);
     return;
   }
 
@@ -305,19 +309,16 @@ app.post("/versions/:versionId/promotion/:environment", (req, res) => {
   );
 
   if (!promotionResult.allowed) {
-    res.status(400).json({
-      success: false,
-      message: promotionResult.reason,
-      data: promotionResult
-    });
+    res.status(400).json(errorResponse(promotionResult.reason, promotionResult));
     return;
   }
 
-  res.json({
-    success: true,
-    message: `Version ${versionId} successfully promoted to ${environment}.`,
-    data: promotionResult
-  });
+  res.json(
+    successResponse(
+      promotionResult,
+      `Version ${versionId} successfully promoted to ${environment}.`
+    )
+  );
 });
 
 // Rollback routes
@@ -330,7 +331,7 @@ app.get("/deployments", (_req, res) => {
 });
 
 app.get("/rollback/:environment/:targetVersionId", (req, res) => {
-  const { environment, targetVersionId } = req.params;
+  const { environment, targetVersionId } = req.params as RollbackParams;
 
   if (environment !== "staging" && environment !== "production") {
     res.status(400).json({
@@ -353,8 +354,8 @@ app.get("/rollback/:environment/:targetVersionId", (req, res) => {
   });
 });
 
-app.post("/rollback/:environment/:targetVersionId", (req, res) => {
-  const { environment, targetVersionId } = req.params;
+app.post("/rollback/:environment/:targetVersionId", requireAdminAuth, (req, res) => {
+  const { environment, targetVersionId } = req.params as RollbackParams;
 
   if (environment !== "staging" && environment !== "production") {
     res.status(400).json({
@@ -396,7 +397,7 @@ app.get("/audit-log", (_req, res) => {
 });
 
 app.get("/audit-log/version/:versionId", (req, res) => {
-  const { versionId } = req.params;
+  const { versionId } = req.params as VersionParams;
   const auditEntries = getAuditLogEntriesByVersionId(versionId);
   res.json({
     success: true,
@@ -407,14 +408,14 @@ app.get("/audit-log/version/:versionId", (req, res) => {
 // --- Webhook Management Endpoints ---
 
 app.get("/webhooks", (_req, res) => {
-  const subscribers = getAllSubscribers();
+  const subscribers = getAllSubscribers().map(redactSubscriber);
   res.json({
     success: true,
     data: subscribers
   });
 });
 
-app.post("/webhooks/subscribe", (req, res) => {
+app.post("/webhooks/subscribe", requireAdminAuth, async (req, res) => {
   const { url, events, secret } = req.body;
 
   if (!url || !events || !secret) {
@@ -433,15 +434,25 @@ app.post("/webhooks/subscribe", (req, res) => {
     return;
   }
 
+  try {
+    await assertSafeWebhookUrl(url);
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Unsafe webhook URL"
+    });
+    return;
+  }
+
   const subscriber = addSubscriber(url, events, secret);
   res.json({
     success: true,
-    data: subscriber
+    data: redactSubscriber(subscriber)
   });
 });
 
-app.delete("/webhooks/:id", (req, res) => {
-  const { id } = req.params;
+app.delete("/webhooks/:id", requireAdminAuth, (req, res) => {
+  const { id } = req.params as WebhookIdParams;
   const removed = removeSubscriber(id);
 
   if (!removed) {
@@ -458,8 +469,8 @@ app.delete("/webhooks/:id", (req, res) => {
   });
 });
 
-app.post("/webhooks/test/:id", async (req, res) => {
-  const { id } = req.params;
+app.post("/webhooks/test/:id", requireAdminAuth, async (req, res) => {
+  const { id } = req.params as WebhookIdParams;
   const subscriber = getSubscriberById(id);
 
   if (!subscriber) {

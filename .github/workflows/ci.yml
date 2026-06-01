@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  backend-quality-gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint if configured
+        run: |
+          if npm run | grep -qE '^  lint$|^    lint$'; then
+            npm run lint
+          else
+            echo "No lint script configured; skipping lint."
+          fi
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Unit tests
+        run: npm test
+      - name: Startup config smoke
+        env:
+          WEBHOOK_INBOUND_SECRET: ci-webhook-secret-value-000000001
+          ADMIN_API_KEY: ci-admin-api-key-value-00000000001
+        run: |
+          npx tsx -e "import { validateRuntimeConfig } from './src/config'; validateRuntimeConfig(); console.log('startup config ok');"
+      - name: Dependency vulnerability check
+        run: npm audit --audit-level=high

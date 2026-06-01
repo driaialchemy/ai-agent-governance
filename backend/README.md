@@ -267,9 +267,9 @@ backend/src/
 
 Controls the shared secret required for inbound webhook authentication.
 
-- **Default:** `inbound-default-secret-change-me`
-- **Usage:** Set this before deploying to production
-- **Example:** `export WEBHOOK_INBOUND_SECRET="your-production-secret"`
+- **Default:** none. Startup and validation reject missing or known placeholder secrets.
+- **Usage:** Set this before running protected inbound webhook flows.
+- **Example:** set `WEBHOOK_INBOUND_SECRET` to a strong secret using your deployment secret manager.
 
 ## Testing
 

@@ -2,15 +2,16 @@ import { evaluateVersionForApproval } from "../approval";
 import { performPromotion, PromotionTarget } from "../promotion";
 import { performRollback } from "../rollback";
 import { Environment } from "../data/deploymentState";
+import { constantTimeEqual, isMissingOrRejectedSecret } from "../security/secrets";
 
-// Get the expected secret from environment variable or use default for prototype
-const EXPECTED_SECRET = process.env.WEBHOOK_INBOUND_SECRET || "inbound-default-secret-change-me";
-
-export function validateWebhookSecret(requestSecret: string | undefined, expectedSecret: string = EXPECTED_SECRET): boolean {
+export function validateWebhookSecret(requestSecret: string | undefined, expectedSecret = process.env.WEBHOOK_INBOUND_SECRET): boolean {
   if (!requestSecret) {
     return false;
   }
-  return requestSecret === expectedSecret;
+  if (typeof expectedSecret !== "string" || isMissingOrRejectedSecret(expectedSecret)) {
+    return false;
+  }
+  return constantTimeEqual(requestSecret, expectedSecret);
 }
 
 export function handleInboundPromotion(

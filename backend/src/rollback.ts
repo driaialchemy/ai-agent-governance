@@ -8,13 +8,26 @@ import {
   Environment
 } from "./data/deploymentState";
 import { dispatchWebhookEvent } from "./webhooks/webhookDispatcher";
+import { Evidence } from "./evidenceBuilder";
+import { ConfidenceScore } from "./confidence";
 
+/**
+ * Result of evaluating or performing a rollback
+ * This is the primary output for Zapier "Rollback Version" actions
+ *
+ * @property allowed - Whether the rollback is permitted
+ * @property reason - Human-readable explanation of the decision
+ * @property evidence - Structured evidence for the target version (if available)
+ * @property confidence - Confidence score for the target version (if available)
+ */
 export interface RollbackDecision {
   environment: Environment;
   currentVersionId: string | null;
   targetVersionId: string;
   allowed: boolean;
   reason: string;
+  evidence?: Evidence;
+  confidence?: ConfidenceScore;
 }
 
 export function evaluateVersionForRollback(
@@ -91,7 +104,9 @@ export function evaluateVersionForRollback(
             currentVersionId,
             targetVersionId,
             allowed: false,
-            reason: `Target version is not eligible for rollback because approval status is '${approvalResult.decision}'. Reason: ${approvalResult.reason}`
+            reason: `Target version is not eligible for rollback because approval status is '${approvalResult.decision}'. Reason: ${approvalResult.reason}`,
+            evidence: approvalResult.evidence,
+            confidence: approvalResult.confidence
           };
         } else {
           result = {
@@ -99,7 +114,9 @@ export function evaluateVersionForRollback(
             currentVersionId,
             targetVersionId,
             allowed: true,
-            reason: `Rollback to previously deployed version ${targetVersionId} is allowed.`
+            reason: `Rollback to previously deployed version ${targetVersionId} is allowed with ${approvalResult.confidence.level} confidence.`,
+            evidence: approvalResult.evidence,
+            confidence: approvalResult.confidence
           };
         }
       }
@@ -114,7 +131,10 @@ export function evaluateVersionForRollback(
       outcome: result.allowed ? "allowed" : "denied",
       reason: result.reason,
       fromVersionId: currentVersionId || undefined,
-      toVersionId: targetVersionId
+      toVersionId: targetVersionId,
+      evidence: result.evidence,
+      confidenceScore: result.confidence?.score,
+      confidenceLevel: result.confidence?.level
     });
   }
 
@@ -137,7 +157,10 @@ export function performRollback(
       outcome: "success",
       reason: `Rollback to version ${targetVersionId} in ${environment} completed successfully.`,
       fromVersionId: decision.currentVersionId || undefined,
-      toVersionId: targetVersionId
+      toVersionId: targetVersionId,
+      evidence: decision.evidence,
+      confidenceScore: decision.confidence?.score,
+      confidenceLevel: decision.confidence?.level
     });
 
     // Fire-and-forget webhook dispatch

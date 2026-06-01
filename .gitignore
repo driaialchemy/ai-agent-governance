@@ -1,3 +1,33 @@
 node_modules/
+
+# Local secrets and environment overrides
 .env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Local Python environments and caches
+.venv/
+venv/
+env/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build, coverage, logs, and generated local artifacts
+dist/
+build/
+coverage/
+logs/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+tmp/
+temp/
+
+# Local tunnel metadata
 ngrok*

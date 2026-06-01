@@ -7,15 +7,31 @@ import {
   Environment
 } from "./data/deploymentState";
 import { dispatchWebhookEvent } from "./webhooks/webhookDispatcher";
+import { meetsConfidenceRequirement, ConfidenceScore } from "./confidence";
+import { Evidence } from "./evidenceBuilder";
 
+/**
+ * Valid promotion target environments
+ */
 export type PromotionTarget = "staging" | "production";
 
+/**
+ * Result of evaluating or performing a promotion
+ * This is the primary output for Zapier "Promote Version" actions
+ *
+ * @property allowed - Whether the promotion is permitted
+ * @property reason - Human-readable explanation of the decision
+ * @property evidence - Structured evidence supporting the decision (if available)
+ * @property confidence - Confidence score and level (if available)
+ */
 export interface PromotionDecision {
   versionId: string;
   targetEnvironment: PromotionTarget;
   allowed: boolean;
   reason: string;
   approvalDecision: "approved" | "rejected" | "blocked_pending_remediation" | "unknown";
+  evidence?: Evidence;
+  confidence?: ConfidenceScore;
 }
 
 export function evaluateVersionForPromotion(
@@ -44,32 +60,58 @@ export function evaluateVersionForPromotion(
         targetEnvironment,
         allowed: false,
         reason: `Version is not eligible for promotion because approval status is '${approvalResult.decision}'. Reason: ${approvalResult.reason}`,
-        approvalDecision: approvalResult.decision
-      };
-    } else if (targetEnvironment === "staging") {
-      result = {
-        versionId,
-        targetEnvironment,
-        allowed: true,
-        reason: "Version is approved and eligible for promotion to staging.",
-        approvalDecision: approvalResult.decision
-      };
-    } else if (targetEnvironment === "production") {
-      result = {
-        versionId,
-        targetEnvironment,
-        allowed: true,
-        reason: "Version is approved and eligible for promotion to production.",
-        approvalDecision: approvalResult.decision
+        approvalDecision: approvalResult.decision,
+        evidence: approvalResult.evidence,
+        confidence: approvalResult.confidence
       };
     } else {
-      result = {
-        versionId,
-        targetEnvironment,
-        allowed: false,
-        reason: "Unknown promotion target.",
-        approvalDecision: approvalResult.decision
-      };
+      // Check confidence requirement for target environment
+      const meetsConfidence = meetsConfidenceRequirement(
+        approvalResult.confidence,
+        targetEnvironment
+      );
+
+      if (!meetsConfidence) {
+        result = {
+          versionId,
+          targetEnvironment,
+          allowed: false,
+          reason: `Version has ${approvalResult.confidence.level} confidence (score: ${approvalResult.confidence.score}), but ${targetEnvironment} requires ${targetEnvironment === "production" ? "HIGH (≥80)" : "MEDIUM (≥50)"} confidence.`,
+          approvalDecision: approvalResult.decision,
+          evidence: approvalResult.evidence,
+          confidence: approvalResult.confidence
+        };
+      } else if (targetEnvironment === "staging") {
+        result = {
+          versionId,
+          targetEnvironment,
+          allowed: true,
+          reason: `Version is approved with ${approvalResult.confidence.level} confidence and eligible for promotion to staging.`,
+          approvalDecision: approvalResult.decision,
+          evidence: approvalResult.evidence,
+          confidence: approvalResult.confidence
+        };
+      } else if (targetEnvironment === "production") {
+        result = {
+          versionId,
+          targetEnvironment,
+          allowed: true,
+          reason: `Version is approved with ${approvalResult.confidence.level} confidence and eligible for promotion to production.`,
+          approvalDecision: approvalResult.decision,
+          evidence: approvalResult.evidence,
+          confidence: approvalResult.confidence
+        };
+      } else {
+        result = {
+          versionId,
+          targetEnvironment,
+          allowed: false,
+          reason: "Unknown promotion target.",
+          approvalDecision: approvalResult.decision,
+          evidence: approvalResult.evidence,
+          confidence: approvalResult.confidence
+        };
+      }
     }
   }
 
@@ -79,7 +121,10 @@ export function evaluateVersionForPromotion(
       versionId,
       environment: targetEnvironment,
       outcome: result.allowed ? "allowed" : "denied",
-      reason: result.reason
+      reason: result.reason,
+      evidence: result.evidence,
+      confidenceScore: result.confidence?.score,
+      confidenceLevel: result.confidence?.level
     });
   }
 
@@ -113,7 +158,10 @@ export function performPromotion(
       outcome: "success",
       reason: `Version ${versionId} successfully promoted to ${targetEnvironment}.`,
       fromVersionId: currentVersionId || undefined,
-      toVersionId: versionId
+      toVersionId: versionId,
+      evidence: decision.evidence,
+      confidenceScore: decision.confidence?.score,
+      confidenceLevel: decision.confidence?.level
     });
 
     // Fire-and-forget webhook dispatch

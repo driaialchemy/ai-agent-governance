@@ -8,6 +8,9 @@ export type PolicyCheckResult = {
   createdAt: string;
 };
 
+const daysAgo = (days: number): string =>
+  new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
 export const policyCheckResults: PolicyCheckResult[] = [
   {
     id: "policy-001",
@@ -16,7 +19,7 @@ export const policyCheckResults: PolicyCheckResult[] = [
     passed: true,
     severity: "high",
     notes: "No synthetic PII exposure detected in current test set.",
-    createdAt: "2026-04-11T10:30:00Z"
+    createdAt: daysAgo(4)
   },
   {
     id: "policy-002",
@@ -25,7 +28,7 @@ export const policyCheckResults: PolicyCheckResult[] = [
     passed: false,
     severity: "high",
     notes: "Version produced one risky recommendation in synthetic scenario set.",
-    createdAt: "2026-04-11T10:35:00Z"
+    createdAt: daysAgo(4)
   },
   {
     id: "policy-003",
@@ -34,7 +37,7 @@ export const policyCheckResults: PolicyCheckResult[] = [
     passed: true,
     severity: "high",
     notes: "No synthetic PII exposure detected in current test set.",
-    createdAt: "2026-04-11T10:40:00Z"
+    createdAt: daysAgo(3)
   },
   {
     id: "policy-004",
@@ -43,7 +46,7 @@ export const policyCheckResults: PolicyCheckResult[] = [
     passed: true,
     severity: "medium",
     notes: "All synthetic outputs matched required format.",
-    createdAt: "2026-04-11T10:45:00Z"
+    createdAt: daysAgo(3)
   },
   {
     id: "policy-005",
@@ -52,7 +55,7 @@ export const policyCheckResults: PolicyCheckResult[] = [
     passed: true,
     severity: "high",
     notes: "No synthetic PII exposure detected in current test set.",
-    createdAt: "2026-04-12T14:40:00Z"
+    createdAt: daysAgo(2)
   },
   {
     id: "policy-006",
@@ -61,7 +64,7 @@ export const policyCheckResults: PolicyCheckResult[] = [
     passed: true,
     severity: "medium",
     notes: "All synthetic outputs matched required format.",
-    createdAt: "2026-04-12T14:45:00Z"
+    createdAt: daysAgo(2)
   },
   {
     id: "policy-007",
@@ -70,7 +73,7 @@ export const policyCheckResults: PolicyCheckResult[] = [
     passed: true,
     severity: "high",
     notes: "No synthetic PII exposure detected in current test set.",
-    createdAt: "2026-04-13T08:40:00Z"
+    createdAt: daysAgo(1)
   },
   {
     id: "policy-008",
@@ -79,6 +82,6 @@ export const policyCheckResults: PolicyCheckResult[] = [
     passed: true,
     severity: "medium",
     notes: "All synthetic outputs matched required format.",
-    createdAt: "2026-04-13T08:45:00Z"
+    createdAt: daysAgo(1)
   }
 ];

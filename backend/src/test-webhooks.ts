@@ -44,11 +44,7 @@ async function runTests() {
   console.log("----------------------------");
 
   const initialSubscribers = getAllSubscribers();
-  assert(initialSubscribers.length >= 2, "getAllSubscribers returns the synthetic subscribers");
-
-  const subscriber001 = getSubscriberById("sub-001");
-  assert(subscriber001 !== null, "getSubscriberById returns correct subscriber for valid id");
-  assertEquals(subscriber001?.url, "https://hooks.zapier.com/example/promotion", "subscriber has correct url");
+  assert(Array.isArray(initialSubscribers), "getAllSubscribers returns subscriber array");
 
   const nonExistentSubscriber = getSubscriberById("sub-999");
   assertEquals(nonExistentSubscriber, null, "getSubscriberById returns null for invalid id");
@@ -57,10 +53,18 @@ async function runTests() {
   const newSubscriber = addSubscriber(
     "https://example.com/test",
     ["promotion_executed"],
-    "test-secret"
+    "test-secret-value-with-enough-length"
   );
   assert(newSubscriber.id.startsWith("sub-"), "addSubscriber creates a new subscriber with generated id");
   assertEquals(getAllSubscribers().length, initialCount + 1, "subscriber count increased after addSubscriber");
+
+  const retrievedSubscriber = getSubscriberById(newSubscriber.id);
+  assert(retrievedSubscriber !== null, "getSubscriberById returns correct subscriber for valid id");
+  assertEquals(retrievedSubscriber?.url, "https://example.com/test", "subscriber has correct url");
+
+  const promotionSubscribers = getSubscribersForEvent("promotion_executed");
+  assert(promotionSubscribers.length >= 1, "getSubscribersForEvent returns subscribers listening to promotion_executed");
+  assert(promotionSubscribers.every(s => s.events.includes("promotion_executed")), "all returned subscribers include the requested event");
 
   const removeSuccess = removeSubscriber(newSubscriber.id);
   assertEquals(removeSuccess, true, "removeSubscriber returns true for valid id");
@@ -68,10 +72,6 @@ async function runTests() {
 
   const removeFailure = removeSubscriber("sub-999");
   assertEquals(removeFailure, false, "removeSubscriber returns false for invalid id");
-
-  const promotionSubscribers = getSubscribersForEvent("promotion_executed");
-  assert(promotionSubscribers.length >= 1, "getSubscribersForEvent returns subscribers listening to promotion_executed");
-  assert(promotionSubscribers.every(s => s.events.includes("promotion_executed")), "all returned subscribers include the requested event");
 
   const approvalSubscribers = getSubscribersForEvent("approval_evaluated");
   const testPingSubscribers = getSubscribersForEvent("test_ping");
@@ -121,11 +121,12 @@ async function runTests() {
   console.log("TEST GROUP: Inbound Webhook Handler");
   console.log("-----------------------------------");
 
-  const validSecret = "inbound-default-secret-change-me";
+  const validSecret = "valid-inbound-secret-value-000000001";
   const wrongSecret = "wrong-secret";
 
-  assertEquals(validateWebhookSecret(validSecret), true, "validateWebhookSecret returns true for matching secret");
-  assertEquals(validateWebhookSecret(wrongSecret), false, "validateWebhookSecret returns false for wrong secret");
+  assertEquals(validateWebhookSecret(validSecret, validSecret), true, "validateWebhookSecret returns true for matching secret");
+  assertEquals(validateWebhookSecret(wrongSecret, validSecret), false, "validateWebhookSecret returns false for wrong secret");
+  assertEquals(validateWebhookSecret("inbound-default-secret-change-me", "inbound-default-secret-change-me"), false, "validateWebhookSecret rejects default secret");
   assertEquals(validateWebhookSecret(undefined), false, "validateWebhookSecret returns false for undefined secret");
   assertEquals(validateWebhookSecret(""), false, "validateWebhookSecret returns false for empty secret");
 
@@ -159,7 +160,7 @@ async function runTests() {
   const auditCountAfter = getAllAuditLogEntries().length;
   assert(auditCountAfter > auditCountBefore, "promotion creates an audit entry");
 
-  const latestAuditEntry = getAllAuditLogEntries()[getAllAuditLogEntries().length - 1];
+  const latestAuditEntry = getAllAuditLogEntries()[getAllAuditLogEntries().length - 1]!;
   assert(latestAuditEntry.id !== undefined, "audit entry has id field");
   assert(latestAuditEntry.timestamp !== undefined, "audit entry has timestamp field");
   assert(latestAuditEntry.actionType !== undefined, "audit entry has actionType field");

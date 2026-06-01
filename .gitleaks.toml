@@ -1,0 +1,8 @@
+title = "ai-agent-governance secret scanning"
+
+[allowlist]
+description = "Allow placeholder env examples only"
+paths = [
+  '''(^|/)\\.env\\.example$''',
+  '''(^|/)backend/\\.env\\.example$'''
+]

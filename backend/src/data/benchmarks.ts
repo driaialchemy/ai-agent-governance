@@ -8,6 +8,9 @@ export type BenchmarkResult = {
   createdAt: string;
 };
 
+const daysAgo = (days: number): string =>
+  new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+
 export const benchmarkResults: BenchmarkResult[] = [
   {
     id: "bench-001",
@@ -16,7 +19,7 @@ export const benchmarkResults: BenchmarkResult[] = [
     score: 78,
     maxScore: 100,
     passed: false,
-    createdAt: "2026-04-11T10:00:00Z"
+    createdAt: daysAgo(4)
   },
   {
     id: "bench-002",
@@ -25,7 +28,7 @@ export const benchmarkResults: BenchmarkResult[] = [
     score: 81,
     maxScore: 100,
     passed: true,
-    createdAt: "2026-04-11T10:05:00Z"
+    createdAt: daysAgo(4)
   },
   {
     id: "bench-003",
@@ -34,7 +37,7 @@ export const benchmarkResults: BenchmarkResult[] = [
     score: 91,
     maxScore: 100,
     passed: true,
-    createdAt: "2026-04-11T10:10:00Z"
+    createdAt: daysAgo(3)
   },
   {
     id: "bench-004",
@@ -43,7 +46,7 @@ export const benchmarkResults: BenchmarkResult[] = [
     score: 89,
     maxScore: 100,
     passed: true,
-    createdAt: "2026-04-11T10:15:00Z"
+    createdAt: daysAgo(3)
   },
   {
     id: "bench-005",
@@ -52,7 +55,7 @@ export const benchmarkResults: BenchmarkResult[] = [
     score: 93,
     maxScore: 100,
     passed: true,
-    createdAt: "2026-04-12T14:30:00Z"
+    createdAt: daysAgo(2)
   },
   {
     id: "bench-006",
@@ -61,7 +64,7 @@ export const benchmarkResults: BenchmarkResult[] = [
     score: 92,
     maxScore: 100,
     passed: true,
-    createdAt: "2026-04-12T14:35:00Z"
+    createdAt: daysAgo(2)
   },
   {
     id: "bench-007",
@@ -70,7 +73,7 @@ export const benchmarkResults: BenchmarkResult[] = [
     score: 95,
     maxScore: 100,
     passed: true,
-    createdAt: "2026-04-13T08:30:00Z"
+    createdAt: daysAgo(1)
   },
   {
     id: "bench-008",
@@ -79,6 +82,6 @@ export const benchmarkResults: BenchmarkResult[] = [
     score: 94,
     maxScore: 100,
     passed: true,
-    createdAt: "2026-04-13T08:35:00Z"
+    createdAt: daysAgo(1)
   }
 ];

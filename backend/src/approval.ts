@@ -12,12 +12,25 @@ import {
 
 import { addAuditLogEntry } from "./auditLog";
 import { dispatchWebhookEvent } from "./webhooks/webhookDispatcher";
+import { validateAllData } from "./deterministicChecks";
+import { buildEvidence, Evidence } from "./evidenceBuilder";
+import { calculateConfidenceScore, ConfidenceScore } from "./confidence";
 
+/**
+ * Approval decision outcomes
+ * - approved: Version passes all checks and is ready for promotion
+ * - rejected: Version fails policy checks and cannot be promoted
+ * - blocked_pending_remediation: Version has missing/invalid data or failed benchmarks
+ */
 export type ApprovalDecision =
   | "approved"
   | "rejected"
   | "blocked_pending_remediation";
 
+/**
+ * Result of evaluating a version for approval
+ * This is the primary output for Zapier "Check Approval Status" actions
+ */
 export interface ApprovalResult {
   versionId: string;
   decision: ApprovalDecision;
@@ -26,6 +39,12 @@ export interface ApprovalResult {
   benchmarkPassed: boolean;
   policyPassed: boolean;
   failedPolicyChecks: string[];
+  /** Structured evidence supporting the approval decision */
+  evidence: Evidence;
+  /** Confidence score and level (LOW/MEDIUM/HIGH) */
+  confidence: ConfidenceScore;
+  /** Any validation errors that blocked approval */
+  validationErrors: string[];
 }
 
 function getPolicyCheckName(check: unknown): string {
@@ -43,6 +62,15 @@ function getPolicyCheckName(check: unknown): string {
 export function evaluateVersionForApproval(versionId: string, logEvaluation = true): ApprovalResult {
   const benchmarkResults = getBenchmarkResultsByVersionId(versionId);
   const policyChecks = getPolicyCheckResultsByVersionId(versionId);
+
+  // Step 1: Deterministic validation (hard gate)
+  const validation = validateAllData(benchmarkResults, policyChecks);
+
+  // Step 2: Build evidence
+  const evidence = buildEvidence(benchmarkResults, policyChecks);
+
+  // Step 3: Calculate confidence
+  const confidence = calculateConfidenceScore(evidence, validation);
 
   const hasBenchmarks = benchmarkResults.length > 0;
   const hasPolicyChecks = policyChecks.length > 0;
@@ -65,7 +93,21 @@ export function evaluateVersionForApproval(versionId: string, logEvaluation = tr
 
   let result: ApprovalResult;
 
-  if (!hasBenchmarks && !hasPolicyChecks) {
+  // Deterministic validation failures block approval
+  if (!validation.passed) {
+    result = {
+      versionId,
+      decision: "blocked_pending_remediation",
+      reason: `Validation failed: ${validation.errors.join("; ")}`,
+      averageBenchmarkScore,
+      benchmarkPassed: false,
+      policyPassed: false,
+      failedPolicyChecks,
+      evidence,
+      confidence,
+      validationErrors: validation.errors
+    };
+  } else if (!hasBenchmarks && !hasPolicyChecks) {
     result = {
       versionId,
       decision: "blocked_pending_remediation",
@@ -73,7 +115,10 @@ export function evaluateVersionForApproval(versionId: string, logEvaluation = tr
       averageBenchmarkScore,
       benchmarkPassed: false,
       policyPassed: false,
-      failedPolicyChecks
+      failedPolicyChecks,
+      evidence,
+      confidence,
+      validationErrors: validation.errors
     };
   } else if (!hasBenchmarks) {
     result = {
@@ -83,7 +128,10 @@ export function evaluateVersionForApproval(versionId: string, logEvaluation = tr
       averageBenchmarkScore,
       benchmarkPassed: false,
       policyPassed,
-      failedPolicyChecks
+      failedPolicyChecks,
+      evidence,
+      confidence,
+      validationErrors: validation.errors
     };
   } else if (!hasPolicyChecks) {
     result = {
@@ -93,7 +141,10 @@ export function evaluateVersionForApproval(versionId: string, logEvaluation = tr
       averageBenchmarkScore,
       benchmarkPassed,
       policyPassed: false,
-      failedPolicyChecks
+      failedPolicyChecks,
+      evidence,
+      confidence,
+      validationErrors: validation.errors
     };
   } else if (!policyPassed) {
     result = {
@@ -103,7 +154,10 @@ export function evaluateVersionForApproval(versionId: string, logEvaluation = tr
       averageBenchmarkScore,
       benchmarkPassed,
       policyPassed,
-      failedPolicyChecks
+      failedPolicyChecks,
+      evidence,
+      confidence,
+      validationErrors: validation.errors
     };
   } else if (!benchmarkPassed) {
     result = {
@@ -113,7 +167,10 @@ export function evaluateVersionForApproval(versionId: string, logEvaluation = tr
       averageBenchmarkScore,
       benchmarkPassed,
       policyPassed,
-      failedPolicyChecks
+      failedPolicyChecks,
+      evidence,
+      confidence,
+      validationErrors: validation.errors
     };
   } else {
     result = {
@@ -123,7 +180,10 @@ export function evaluateVersionForApproval(versionId: string, logEvaluation = tr
       averageBenchmarkScore,
       benchmarkPassed,
       policyPassed,
-      failedPolicyChecks
+      failedPolicyChecks,
+      evidence,
+      confidence,
+      validationErrors: validation.errors
     };
   }
 
@@ -132,7 +192,10 @@ export function evaluateVersionForApproval(versionId: string, logEvaluation = tr
       actionType: "approval_evaluated",
       versionId,
       outcome: result.decision,
-      reason: result.reason
+      reason: result.reason,
+      evidence: result.evidence,
+      confidenceScore: result.confidence.score,
+      confidenceLevel: result.confidence.level
     });
 
     // Fire-and-forget webhook dispatch

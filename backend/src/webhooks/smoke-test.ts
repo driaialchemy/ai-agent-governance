@@ -51,11 +51,11 @@ const testPayload: WebhookPayload = {
 };
 
 const payloadString = JSON.stringify(testPayload);
-const testSecret = "zapier-test-secret-001";
-const signature = generateSignature(payloadString, testSecret);
+const testSigningKey = process.env.WEBHOOK_SMOKE_TEST_SECRET || "placeholder-signing-key-for-local-smoke-test";
+const signature = generateSignature(payloadString, testSigningKey);
 
 console.log(`   Payload: ${payloadString.substring(0, 80)}...`);
-console.log(`   Secret: ${testSecret}`);
+console.log("   Signing key: [redacted]");
 console.log(`   Signature: ${signature}`);
 console.log();
 

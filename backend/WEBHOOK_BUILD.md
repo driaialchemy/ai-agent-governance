@@ -126,11 +126,11 @@ curl -X POST http://localhost:3000/webhooks/actions/rollback \
 
 Controls the shared secret required for inbound webhook authentication.
 
-- **Default:** `inbound-default-secret-change-me`
-- **Usage:** Set this environment variable to a strong secret in production
-- **Example:** `export WEBHOOK_INBOUND_SECRET="your-production-secret"`
+- **Default:** none. Missing or known placeholder secrets are rejected.
+- **Usage:** Set this environment variable to a strong secret before running protected webhook flows.
+- **Example:** set `WEBHOOK_INBOUND_SECRET` to a strong secret using your deployment secret manager.
 
-**Important:** The default secret is for prototype/testing only. Change it before deploying to production.
+**Important:** Do not use placeholder secrets in any deployment.
 
 ## Zapier Connection Guide
 

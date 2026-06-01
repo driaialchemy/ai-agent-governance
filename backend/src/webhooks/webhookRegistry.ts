@@ -14,7 +14,11 @@ export function addSubscriber(
   events: WebhookEventType[],
   secret: string
 ): WebhookSubscriber {
-  const nextId = webhookSubscribers.length + 1;
+  const maxId = webhookSubscribers.reduce((max, subscriber) => {
+    const idNumber = Number(subscriber.id.replace("sub-", ""));
+    return Number.isFinite(idNumber) ? Math.max(max, idNumber) : max;
+  }, 0);
+  const nextId = maxId + 1;
   const paddedId = String(nextId).padStart(3, "0");
 
   const newSubscriber: WebhookSubscriber = {

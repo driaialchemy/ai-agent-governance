@@ -46,11 +46,19 @@ backend/src/
 │   ├── registryLookup.ts
 │   ├── benchmarkLookup.ts
 │   └── policyCheckLookup.ts
+├── webhooks/          # Webhook infrastructure
+│   ├── webhookRegistry.ts
+│   ├── webhookDispatcher.ts
+│   └── inboundHandler.ts
 ├── *.ts               # Core business logic
 │   ├── approval.ts
 │   ├── promotion.ts
 │   ├── rollback.ts
-│   └── auditLog.ts
+│   ├── auditLog.ts
+│   ├── confidence.ts
+│   ├── evidenceBuilder.ts
+│   ├── deterministicChecks.ts
+│   └── apiHelpers.ts
 ├── server.ts          # Express API endpoints
 ├── test-*.ts          # Test scripts
 └── scripts/           # Utility scripts
