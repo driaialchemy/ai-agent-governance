@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "tsx src/server.ts",
     "test": "tsx src/test-governance.ts && tsx src/test-webhooks.ts",
     "test:contracts": "tsx src/test-agent-contracts.ts"
   },
