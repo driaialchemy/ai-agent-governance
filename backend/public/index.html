@@ -11,6 +11,7 @@
       <div class="title-block">
         <p class="eyebrow">AI Agent Governance</p>
         <h1>Promotion Review Workbench</h1>
+        <p id="last-refreshed" class="last-refreshed">Last refreshed: pending</p>
       </div>
       <div class="header-actions">
         <span id="server-status" class="status-pill neutral">Checking</span>
@@ -23,6 +24,8 @@
     </header>
 
     <main class="app-shell">
+      <div id="top-message" class="top-message" aria-live="polite"></div>
+
       <section class="metric-strip" aria-label="Governance summary">
         <article class="metric-card">
           <span class="metric-label">Agents</span>

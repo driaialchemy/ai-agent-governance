@@ -16,7 +16,9 @@ const state = {
 
 const els = {
   serverStatus: document.getElementById("server-status"),
+  lastRefreshed: document.getElementById("last-refreshed"),
   refreshButton: document.getElementById("refresh-button"),
+  topMessage: document.getElementById("top-message"),
   adminKey: document.getElementById("admin-key"),
   agentSelect: document.getElementById("agent-select"),
   versionSelect: document.getElementById("version-select"),
@@ -56,7 +58,11 @@ function escapeHtml(value) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, options);
+  const headers = {
+    "Cache-Control": "no-cache",
+    ...(options.headers || {})
+  };
+  const response = await fetch(path, { ...options, headers });
   const body = await response.json().catch(() => ({}));
 
   if (!response.ok || body.success === false) {
@@ -72,7 +78,31 @@ function setServerStatus(text, tone) {
 }
 
 function setMessage(text, tone = "neutral") {
-  els.messageLog.innerHTML = `<div class="message ${tone}">${escapeHtml(text)}</div>`;
+  const message = `<div class="message ${tone}">${escapeHtml(text)}</div>`;
+  els.topMessage.innerHTML = message;
+  els.messageLog.innerHTML = message;
+}
+
+function clearMessage() {
+  els.topMessage.innerHTML = "";
+  els.messageLog.innerHTML = "";
+}
+
+function setLoading(isLoading) {
+  els.refreshButton.disabled = isLoading;
+  els.refreshButton.textContent = isLoading ? "Refreshing" : "Refresh";
+  if (isLoading) {
+    setServerStatus("Loading", "warn");
+  }
+}
+
+function updateRefreshTime() {
+  const refreshedAt = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit"
+  }).format(new Date());
+  els.lastRefreshed.textContent = `Last refreshed: ${refreshedAt}`;
 }
 
 function formatDate(value) {
@@ -392,14 +422,19 @@ async function loadSelectedVersion() {
 }
 
 async function refreshAll(message) {
+  setLoading(true);
   try {
+    clearMessage();
     await loadBaseData();
     await loadSelectedVersion();
     renderAll();
-    if (message) setMessage(message, "good");
+    updateRefreshTime();
+    if (message) setMessage(`${message} ${els.lastRefreshed.textContent}.`, "good");
   } catch (error) {
     setServerStatus("Error", "bad");
     setMessage(error.message, "bad");
+  } finally {
+    setLoading(false);
   }
 }
 
