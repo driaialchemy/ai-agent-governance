@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Agent Governance Workbench</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="title-block">
+        <p class="eyebrow">AI Agent Governance</p>
+        <h1>Promotion Review Workbench</h1>
+      </div>
+      <div class="header-actions">
+        <span id="server-status" class="status-pill neutral">Checking</span>
+        <label class="admin-key">
+          <span>Admin key</span>
+          <input id="admin-key" type="password" autocomplete="off" placeholder="Required for changes">
+        </label>
+        <button id="refresh-button" class="button secondary" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="metric-strip" aria-label="Governance summary">
+        <article class="metric-card">
+          <span class="metric-label">Agents</span>
+          <strong id="metric-agents">-</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Versions</span>
+          <strong id="metric-versions">-</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Staging</span>
+          <strong id="metric-staging">-</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Production</span>
+          <strong id="metric-production">-</strong>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Audit Events</span>
+          <strong id="metric-audit">-</strong>
+        </article>
+      </section>
+
+      <section class="workbench-grid">
+        <aside class="panel selector-panel">
+          <div class="panel-heading">
+            <p class="eyebrow">Scope</p>
+            <h2>Agent Version</h2>
+          </div>
+          <label class="field">
+            <span>Agent</span>
+            <select id="agent-select"></select>
+          </label>
+          <label class="field">
+            <span>Version</span>
+            <select id="version-select"></select>
+          </label>
+          <div id="version-detail" class="detail-stack"></div>
+          <div class="subpanel">
+            <h3>Deployments</h3>
+            <div id="deployment-list" class="deployment-list"></div>
+          </div>
+        </aside>
+
+        <section class="panel decision-panel">
+          <div class="panel-heading split">
+            <div>
+              <p class="eyebrow">Decision</p>
+              <h2>Approval and Promotion</h2>
+            </div>
+            <span id="decision-pill" class="status-pill neutral">Pending</span>
+          </div>
+
+          <div class="decision-layout">
+            <div class="confidence-card">
+              <div id="confidence-ring" class="confidence-ring" style="--score: 0">
+                <span id="confidence-score">-</span>
+              </div>
+              <div>
+                <span id="confidence-level" class="confidence-level">Confidence</span>
+                <p id="decision-reason" class="muted">Select a version to review.</p>
+              </div>
+            </div>
+            <div id="factor-list" class="factor-list"></div>
+          </div>
+
+          <div id="validation-list" class="validation-list"></div>
+
+          <div class="action-grid">
+            <button id="evaluate-staging" class="button secondary" type="button">Evaluate Staging</button>
+            <button id="evaluate-production" class="button secondary" type="button">Evaluate Production</button>
+            <button id="promote-staging" class="button primary" type="button">Promote Staging</button>
+            <button id="promote-production" class="button primary" type="button">Promote Production</button>
+          </div>
+
+          <div class="promotion-grid">
+            <article id="staging-card" class="promotion-card"></article>
+            <article id="production-card" class="promotion-card"></article>
+          </div>
+
+          <div id="message-log" class="message-log" aria-live="polite"></div>
+        </section>
+
+        <section class="panel evidence-panel">
+          <div class="panel-heading">
+            <p class="eyebrow">Evidence</p>
+            <h2>Benchmarks and Policy</h2>
+          </div>
+          <div class="subpanel">
+            <h3>Benchmark Results</h3>
+            <div id="benchmark-table" class="table-wrap"></div>
+          </div>
+          <div class="subpanel">
+            <h3>Policy Checks</h3>
+            <div id="policy-table" class="table-wrap"></div>
+          </div>
+          <div class="subpanel">
+            <h3>Audit Timeline</h3>
+            <div id="audit-list" class="audit-list"></div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="/dashboard.js"></script>
+  </body>
+</html>

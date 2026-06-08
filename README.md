@@ -51,6 +51,7 @@ The prototype includes:
 
 ### API and Integration
 - **REST API** - Consistent HTTP endpoints for all operations
+- **Promotion Review Workbench** - Local dashboard for approval evidence, confidence scoring, promotion checks, and audit history
 - **Webhook Support** - Event-based triggers for approval, promotion, and rollback actions
 - **API Helpers** - Validation and response formatting for consistency
 - **Automated Tests** - 150 tests covering deterministic gates, evidence, confidence, and end-to-end workflows
@@ -66,6 +67,7 @@ The prototype includes:
 ✅ In-memory synthetic data for testing
 ✅ Comprehensive automated test coverage
 ✅ Clean separation between core logic and API layer
+✅ Local dashboard for reviewing promotion readiness
 ✅ Webhook infrastructure for event triggers
 ✅ Documented future Zapier integration paths
 
@@ -75,7 +77,7 @@ The prototype includes:
 ❌ Rate limiting or production hardening
 ❌ Multi-tenant support
 ❌ Zapier SDK integration (documented for future)
-❌ Frontend UI
+❌ Persistent production dashboard with user accounts
 
 **Intended Use:** Foundation for future Zapier integration, reference implementation for governance patterns, learning tool for AI agent workflow design.
 
@@ -214,6 +216,14 @@ npx tsx src/server.ts
 
 Server starts on `http://localhost:3000`
 
+Open the local dashboard:
+
+```powershell
+start chrome http://localhost:3000
+```
+
+The dashboard uses the existing REST API. Read-only review actions do not need an admin key. Promotion buttons require the local `ADMIN_API_KEY` from `backend\.env`.
+
 ### Test the API
 
 ```powershell
@@ -285,6 +295,8 @@ Root:
 ├── ZAPIER_READINESS.md        # Future Zapier integration guide
 ├── README.md                  # This file
 ```
+
+Dashboard assets live in `backend/public/` and are served by the Express backend.
 
 ---
 
@@ -561,11 +573,11 @@ Potential enhancements (not yet implemented):
    - Make validation rules configurable (freshness window, pass threshold)
    - Environment-based configuration
 
-5. **UI Dashboard**
-   - View approval status with evidence
-   - Trigger promotions/rollbacks
-   - Monitor confidence trends
-   - Visualize audit trail
+5. **Dashboard Enhancements**
+   - Add rollback controls
+   - Add webhook subscription management
+   - Add confidence trend charts
+   - Add audit export controls
 
 6. **Enhanced Observability**
    - Structured logging

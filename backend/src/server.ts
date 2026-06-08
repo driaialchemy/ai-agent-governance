@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import * as path from "node:path";
 import {
   getAllAgents,
   getAgentById,
@@ -57,6 +58,7 @@ import { WebhookSubscriber } from "./webhooks/types";
 
 const app = express();
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "..", "public")));
 
 validateRuntimeConfig();
 
