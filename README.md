@@ -2,6 +2,26 @@
 
 A beginner-friendly local-first prototype for managing AI agent governance with evidence-based decision-making and synthetic data.
 
+## For A Novice Reader
+
+This app is a control room for deciding whether an AI agent version is safe
+enough to move forward. It shows benchmark results, policy checks, confidence
+scores, promotion readiness, deployment history, and audit events in one local
+dashboard.
+
+In plain terms: it helps answer, "Do we have enough evidence to promote this AI
+agent to staging or production, and can we explain why?"
+
+## For A Technical Reader
+
+The project is a TypeScript/Node Express backend with in-memory synthetic agent
+registry data, benchmark results, policy checks, deployment state, audit logging,
+promotion/rollback logic, webhook scaffolding, and a static dashboard served from
+`backend/public`. Deterministic validation, evidence building, and confidence
+scoring enforce hard gates before promotion actions. It is local-first and
+prototype-scoped; persistence, auth hardening, and real Zapier SDK integration
+are documented future work.
+
 ## 📋 Project Overview
 
 This system provides a governance workflow for AI agents that evolves from basic registry and approval patterns into an **assurance-first approach** with deterministic validation, structured evidence collection, and confidence-based promotion enforcement.
