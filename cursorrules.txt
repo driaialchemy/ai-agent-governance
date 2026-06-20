@@ -1,0 +1,72 @@
+---
+
+description: Use when modifying the AI Agent Registry and Promotion Workflow repo, especially approval, promotion, rollback, audit logging, specs, policy checks, benchmarks, deployment state, API routes, tests, or README documentation.
+alwaysApply: false
+------------------
+
+This repository is a local-first AI agent governance prototype built with TypeScript and Express.
+
+Core project identity:
+
+* The system manages AI agent governance through an agent registry, benchmark evaluation, policy compliance, approval decisions, promotion management, rollback support, audit trails, and REST API endpoints.
+* The project is beginner-friendly by design.
+* The core system must run offline.
+* All data is synthetic and in-memory.
+* Deployment state resets on restart.
+* Tests are required for critical governance behavior.
+
+Follow these rules:
+
+* Read CLAUDE.md first when available.
+* Inspect existing files before editing.
+* Preserve the existing TypeScript, Express, in-memory data, lookup-function, and test-script patterns.
+* Keep changes small, targeted, and easy to review.
+* Do not perform broad refactors unless explicitly requested.
+* Do not add a database.
+* Do not add authentication or authorization.
+* Do not add a frontend UI.
+* Do not add Zapier integration unless explicitly requested.
+* Do not add external API dependencies to the core governance workflow.
+* Keep optional external scripts clearly separate from the offline core system.
+* Keep naming explicit and beginner-readable.
+* Reuse existing response formats: `{ success: true, data: ... }`, `{ success: true, message: ..., data: ... }`, or `{ success: false, message: ... }`.
+* Preserve REST behavior: GET routes must be read-only and must not mutate audit logs or deployment state.
+* POST routes may mutate state and should create appropriate audit records.
+* Preserve clear 400 and 404 behavior for invalid or missing resources.
+* Add or update tests for every behavior change.
+* Run `npm test` before completing work.
+* Do not weaken or remove existing tests to make changes pass.
+
+Current governance behavior to preserve:
+
+* Approval evaluates benchmark results and policy check results.
+* A version is approved only when all required benchmarks and all required policy checks pass.
+* A version is rejected when policy checks fail.
+* A version is blocked_pending_remediation when benchmark or policy data is missing, or benchmarks fail while policy checks pass.
+* Promotion requires an approved version and a valid target environment.
+* Rollback requires the target version to have been previously deployed to that environment, belong to the same agent, be approved, and differ from the currently deployed version.
+* Audit logging should record approval evaluations, promotion evaluations, promotion executions, rollback evaluations, and rollback executions.
+* Rollback execution audit entries should track fromVersionId and toVersionId.
+
+When adding Spec-Driven Development:
+
+* Treat specs as executable governance artifacts, not just documentation.
+* Specs should define allowed environments, required benchmarks, required policy checks, prohibited capabilities, approval rules, promotion rules, rollback rules, and audit requirements.
+* Spec validation should happen before or alongside approval, promotion, and rollback logic.
+* Missing or invalid specs should block approval, promotion, or rollback with clear beginner-readable reasons.
+* Do not describe the project as production enforcement unless it actually blocks real external systems.
+* Use accurate language: spec-driven validation, auditable governance workflow, local-first prototype.
+
+Testing requirements:
+
+* Keep `npm test` running real assertions.
+* Add tests for approval, promotion, rollback, audit logging, GET route read-only behavior, denied actions, and any new SDD/spec behavior.
+* Tests must remain deterministic and offline.
+* Do not require API keys for tests.
+
+Documentation requirements:
+
+* Update README.md when behavior changes.
+* Keep documentation novice-readable.
+* Clearly distinguish current working behavior from planned future enhancements.
+* Do not claim database persistence, authentication, frontend UI, Zapier integration, or production readiness unless those features actually exist.

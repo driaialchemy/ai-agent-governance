@@ -13,6 +13,7 @@ This system provides a complete governance workflow for AI agents, including:
 - **Promotion Management** - Deploy versions to staging and production
 - **Rollback Support** - Revert to previous versions when needed
 - **Audit Trail** - Complete history of all governance actions
+- **Spec-Driven Governance** - Executable governance specs validate approval, promotion, and rollback
 - **REST API** - HTTP endpoints for all operations
 
 ### Design Principles
@@ -61,8 +62,8 @@ This system provides a complete governance workflow for AI agents, including:
 
 - ✅ **Full governance workflow**: approval → promotion → rollback
 - ✅ **Complete audit trail**: all actions logged with details
-- ✅ **REST API**: 16 endpoints covering all operations
-- ✅ **Automated tests**: 28 assertions, all passing
+- ✅ **REST API**: 20 endpoints covering all operations
+- ✅ **Automated tests**: 56 assertions across governance and SDD suites, all passing
 - ✅ **GET routes read-only**: evaluations don't mutate state
 - ✅ **Deployment state tracking**: history for staging and production
 - ✅ **Error handling**: clear 400/404 responses for invalid requests
@@ -75,6 +76,12 @@ GOVERNANCE WORKFLOW TESTS
 Passed: 28
 Failed: 0
 ✅ ALL TESTS PASSED
+
+SPEC-DRIVEN GOVERNANCE TESTS
+============================
+Passed: 28
+Failed: 0
+✅ ALL SDD TESTS PASSED
 ```
 
 ## 🚀 Quick Start
@@ -139,16 +146,22 @@ curl http://localhost:3000/audit-log
 ```
 backend/
 ├── src/
+│   ├── lib/                       # Lookup functions
+│   │   ├── registryLookup.ts      # Query agents/versions
+│   │   ├── benchmarkLookup.ts     # Query benchmark data
+│   │   ├── policyCheckLookup.ts   # Query policy data
+│   │   ├── specLookup.ts          # Query governance specs
+│   │   └── specValidation.ts      # Validate specs for governance actions
+│   │
+│   ├── specs/                     # Governance spec types
+│   │   └── specTypes.ts
+│   │
 │   ├── data/                      # Synthetic in-memory data
 │   │   ├── registry.ts            # Agents and versions
 │   │   ├── benchmarks.ts          # Performance test results
 │   │   ├── policyChecks.ts        # Compliance check results
+│   │   ├── governanceSpecs.ts     # Executable governance specs
 │   │   └── deploymentState.ts     # Current deployment tracking
-│   │
-│   ├── lib/                       # Lookup functions
-│   │   ├── registryLookup.ts      # Query agents/versions
-│   │   ├── benchmarkLookup.ts     # Query benchmark data
-│   │   └── policyCheckLookup.ts   # Query policy data
 │   │
 │   ├── approval.ts                # Approval decision logic
 │   ├── promotion.ts               # Promotion evaluation & execution
@@ -157,6 +170,7 @@ backend/
 │   ├── server.ts                  # Express API endpoints
 │   │
 │   ├── test-governance.ts         # Automated tests (28 assertions)
+│   ├── test-sdd.ts                # SDD governance tests (28 assertions)
 │   ├── test-*.ts                  # Additional test scripts
 │   │
 │   ├── orchestrators/             # Optional external integrations
@@ -215,6 +229,15 @@ README.md                          # This file
 | GET | `/deployments` | Current deployment state |
 | GET | `/audit-log` | All audit entries |
 | GET | `/audit-log/version/:id` | Audit entries for version |
+
+### Spec Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/specs` | List all governance specs |
+| GET | `/specs/:id` | Get a specific governance spec |
+| GET | `/versions/:id/spec` | Get spec for a version |
+| GET | `/versions/:id/spec-validation` | Read-only spec validation result |
 
 ### Response Format
 
@@ -309,6 +332,46 @@ npx tsx src/test-rollback.ts
 
 *Note: Deployment state resets when server restarts*
 
+## Spec-Driven Governance Layer
+
+This prototype now includes a **Spec-Driven Development (SDD) governance layer**. In this system, a governance spec is not just documentation — it is an **executable governance artifact** that approval, promotion, and rollback decisions are checked against.
+
+### What a spec defines
+
+Each governance spec describes what an agent version is allowed to do, including:
+
+- Allowed environments (`staging`, `production`)
+- Required benchmark and policy check IDs
+- Minimum benchmark pass rate
+- Required and prohibited capabilities
+- Data access level
+- Promotion rules (approval requirements, prior staging for production)
+- Rollback rules (whether rollback is allowed, approval requirements)
+- Audit requirements (which governance events should be logged)
+
+### How specs fit into the workflow
+
+**Before:** Agent version → benchmark checks → policy checks → approval → promotion or rollback → audit log
+
+**Now:** Agent version → governance spec → spec validation → benchmark checks → policy checks → approval → promotion or rollback → audit log
+
+If a spec is missing or invalid, approval is blocked with clear reasons. Promotion and rollback also check spec rules such as allowed environments, prior staging requirements, and rollback permissions.
+
+### Spec API endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/specs` | List all governance specs |
+| GET | `/specs/:id` | Get a specific governance spec |
+| GET | `/versions/:id/spec` | Get the spec for a version |
+| GET | `/versions/:id/spec-validation` | Read-only spec validation result |
+
+### Important scope note
+
+This remains a **local-first synthetic prototype** with in-memory data. The SDD layer provides **spec-driven validation** and an **auditable governance workflow** — it does not enforce production deployments on real external systems.
+
+---
+
 ## 🔐 Governance Rules
 
 ### Approval Criteria
@@ -349,6 +412,9 @@ The system logs these action types:
 - `promotion_executed` - Promotion completed
 - `rollback_evaluated` - Rollback eligibility checked
 - `rollback_executed` - Rollback completed
+- `spec_validated` - Governance spec validation passed
+- `spec_validation_failed` - Governance spec validation failed
+- `spec_missing` - No governance spec found for version
 
 Each entry includes:
 - Unique ID and timestamp
@@ -412,5 +478,5 @@ ISC
 
 ---
 
-*Last Updated: 2026-04-13*
-*All tests passing | 28/28 assertions ✅*
+*Last Updated: 2026-06-20*
+*All tests passing | 56/56 assertions ✅*

@@ -32,6 +32,12 @@ import {
   getAuditLogEntriesByVersionId
 } from "./auditLog";
 import {
+  getAllGovernanceSpecs,
+  getGovernanceSpecById,
+  getGovernanceSpecForVersion
+} from "./lib/specLookup";
+import { validateSpecForVersion } from "./lib/specValidation";
+import {
   getAllSubscribers,
   getSubscriberById,
   addSubscriber,
@@ -217,6 +223,81 @@ app.get("/versions/:versionId/policy-checks/summary", (req, res) => {
       passedAllPolicyChecks,
       failedChecks
     }
+  });
+});
+
+// Spec routes
+
+app.get("/specs", (_req, res) => {
+  const specs = getAllGovernanceSpecs();
+  res.json({
+    success: true,
+    data: specs
+  });
+});
+
+app.get("/specs/:specId", (req, res) => {
+  const { specId } = req.params;
+  const spec = getGovernanceSpecById(specId);
+
+  if (!spec) {
+    res.status(404).json({
+      success: false,
+      message: `Governance spec with ID '${specId}' not found.`
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: spec
+  });
+});
+
+app.get("/versions/:versionId/spec", (req, res) => {
+  const { versionId } = req.params;
+  const version = getVersionById(versionId);
+
+  if (!version) {
+    res.status(404).json({
+      success: false,
+      message: `Version with ID '${versionId}' not found.`
+    });
+    return;
+  }
+
+  const spec = getGovernanceSpecForVersion(versionId);
+
+  if (!spec) {
+    res.status(404).json({
+      success: false,
+      message: `No governance spec found for version '${versionId}'.`
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: spec
+  });
+});
+
+app.get("/versions/:versionId/spec-validation", (req, res) => {
+  const { versionId } = req.params;
+  const version = getVersionById(versionId);
+
+  if (!version) {
+    res.status(404).json({
+      success: false,
+      message: `Version with ID '${versionId}' not found.`
+    });
+    return;
+  }
+
+  const validationResult = validateSpecForVersion(versionId);
+  res.json({
+    success: true,
+    data: validationResult
   });
 });
 

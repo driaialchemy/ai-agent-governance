@@ -1,3 +1,5 @@
+import { getGovernanceSpecForVersion } from "./lib/specLookup";
+import { validateSpecForVersion } from "./lib/specValidation";
 import {
   getBenchmarkResultsByVersionId,
   getAverageBenchmarkScoreByVersionId,
@@ -40,7 +42,94 @@ function getPolicyCheckName(check: unknown): string {
   return String(possibleName);
 }
 
+function logSpecValidationAudit(
+  versionId: string,
+  logEvaluation: boolean
+): void {
+  if (!logEvaluation) {
+    return;
+  }
+
+  const specValidation = validateSpecForVersion(versionId);
+  const spec = getGovernanceSpecForVersion(versionId);
+  const shouldLogSpecValidation = spec?.auditRequirements.logSpecValidation ?? true;
+
+  if (!shouldLogSpecValidation) {
+    return;
+  }
+
+  if (specValidation.outcome === "missing_spec") {
+    addAuditLogEntry({
+      actionType: "spec_missing",
+      versionId,
+      outcome: "missing_spec",
+      reason: specValidation.reasons.join(" ")
+    });
+    return;
+  }
+
+  if (specValidation.outcome === "failed") {
+    addAuditLogEntry({
+      actionType: "spec_validation_failed",
+      versionId,
+      outcome: "failed",
+      reason: specValidation.reasons.join(" "),
+      specId: specValidation.specId,
+      specVersion: specValidation.specVersion
+    });
+    return;
+  }
+
+  addAuditLogEntry({
+    actionType: "spec_validated",
+    versionId,
+    outcome: "passed",
+    reason: specValidation.reasons.join(" "),
+    specId: specValidation.specId,
+    specVersion: specValidation.specVersion
+  });
+}
+
 export function evaluateVersionForApproval(versionId: string, logEvaluation = true): ApprovalResult {
+  const specValidation = validateSpecForVersion(versionId);
+
+  if (logEvaluation) {
+    logSpecValidationAudit(versionId, logEvaluation);
+  }
+
+  if (!specValidation.allowed) {
+    const result: ApprovalResult = {
+      versionId,
+      decision: "blocked_pending_remediation",
+      reason: specValidation.reasons.join(" "),
+      averageBenchmarkScore: null,
+      benchmarkPassed: false,
+      policyPassed: false,
+      failedPolicyChecks: []
+    };
+
+    if (logEvaluation) {
+      const auditEntry = addAuditLogEntry({
+        actionType: "approval_evaluated",
+        versionId,
+        outcome: result.decision,
+        reason: result.reason,
+        specId: specValidation.specId,
+        specVersion: specValidation.specVersion
+      });
+
+      try {
+        dispatchWebhookEvent("approval_evaluated", auditEntry).catch((err) => {
+          console.error("Webhook dispatch error (non-blocking):", err);
+        });
+      } catch (err) {
+        console.error("Webhook dispatch error (non-blocking):", err);
+      }
+    }
+
+    return result;
+  }
+
   const benchmarkResults = getBenchmarkResultsByVersionId(versionId);
   const policyChecks = getPolicyCheckResultsByVersionId(versionId);
 
@@ -132,10 +221,11 @@ export function evaluateVersionForApproval(versionId: string, logEvaluation = tr
       actionType: "approval_evaluated",
       versionId,
       outcome: result.decision,
-      reason: result.reason
+      reason: result.reason,
+      specId: specValidation.specId,
+      specVersion: specValidation.specVersion
     });
 
-    // Fire-and-forget webhook dispatch
     try {
       dispatchWebhookEvent("approval_evaluated", auditEntry).catch((err) => {
         console.error("Webhook dispatch error (non-blocking):", err);

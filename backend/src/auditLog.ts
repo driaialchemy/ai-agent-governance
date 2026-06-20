@@ -3,7 +3,10 @@ export type AuditActionType =
   | "promotion_evaluated"
   | "promotion_executed"
   | "rollback_evaluated"
-  | "rollback_executed";
+  | "rollback_executed"
+  | "spec_validated"
+  | "spec_validation_failed"
+  | "spec_missing";
 
 export interface AuditLogEntry {
   id: string;
@@ -15,6 +18,8 @@ export interface AuditLogEntry {
   reason: string;
   fromVersionId?: string;
   toVersionId?: string;
+  specId?: string;
+  specVersion?: string;
 }
 
 const auditLog: AuditLogEntry[] = [];

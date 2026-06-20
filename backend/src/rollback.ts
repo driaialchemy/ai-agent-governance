@@ -1,5 +1,6 @@
 import { getVersionById } from "./lib/registryLookup";
 import { evaluateVersionForApproval } from "./approval";
+import { validateSpecForRollback } from "./lib/specValidation";
 import { addAuditLogEntry } from "./auditLog";
 import {
   getCurrentDeployedVersionId,
@@ -71,36 +72,48 @@ export function evaluateVersionForRollback(
         reason: `Target version belongs to a different agent. Current agent: ${currentVersion.agentId}, Target agent: ${targetVersion.agentId}`
       };
     } else {
-      const previousVersionIds = getPreviousDeployedVersionIds(environment);
-      const isPreviouslyDeployed = previousVersionIds.includes(targetVersionId);
+      const specValidation = validateSpecForRollback(targetVersionId, environment);
 
-      if (!isPreviouslyDeployed) {
+      if (!specValidation.allowed) {
         result = {
           environment,
           currentVersionId,
           targetVersionId,
           allowed: false,
-          reason: "Target version was never previously deployed to this environment."
+          reason: specValidation.reasons.join(" ")
         };
       } else {
-        const approvalResult = evaluateVersionForApproval(targetVersionId, logEvaluation);
+        const previousVersionIds = getPreviousDeployedVersionIds(environment);
+        const isPreviouslyDeployed = previousVersionIds.includes(targetVersionId);
 
-        if (approvalResult.decision !== "approved") {
+        if (!isPreviouslyDeployed) {
           result = {
             environment,
             currentVersionId,
             targetVersionId,
             allowed: false,
-            reason: `Target version is not eligible for rollback because approval status is '${approvalResult.decision}'. Reason: ${approvalResult.reason}`
+            reason: "Target version was never previously deployed to this environment."
           };
         } else {
-          result = {
-            environment,
-            currentVersionId,
-            targetVersionId,
-            allowed: true,
-            reason: `Rollback to previously deployed version ${targetVersionId} is allowed.`
-          };
+          const approvalResult = evaluateVersionForApproval(targetVersionId, logEvaluation);
+
+          if (approvalResult.decision !== "approved") {
+            result = {
+              environment,
+              currentVersionId,
+              targetVersionId,
+              allowed: false,
+              reason: `Target version is not eligible for rollback because approval status is '${approvalResult.decision}'. Reason: ${approvalResult.reason}`
+            };
+          } else {
+            result = {
+              environment,
+              currentVersionId,
+              targetVersionId,
+              allowed: true,
+              reason: `Rollback to previously deployed version ${targetVersionId} is allowed.`
+            };
+          }
         }
       }
     }
@@ -140,7 +153,6 @@ export function performRollback(
       toVersionId: targetVersionId
     });
 
-    // Fire-and-forget webhook dispatch
     try {
       dispatchWebhookEvent("rollback_executed", auditEntry).catch((err) => {
         console.error("Webhook dispatch error (non-blocking):", err);

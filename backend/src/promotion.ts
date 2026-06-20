@@ -1,5 +1,6 @@
 import { getVersionById } from "./lib/registryLookup";
 import { evaluateVersionForApproval } from "./approval";
+import { validateSpecForPromotion } from "./lib/specValidation";
 import { addAuditLogEntry } from "./auditLog";
 import {
   getCurrentDeployedVersionId,
@@ -36,40 +37,59 @@ export function evaluateVersionForPromotion(
       approvalDecision: "unknown"
     };
   } else {
-    const approvalResult = evaluateVersionForApproval(versionId, logEvaluation);
+    const specValidation = validateSpecForPromotion(versionId, targetEnvironment);
 
-    if (approvalResult.decision !== "approved") {
+    if (!specValidation.allowed) {
+      const approvalResult = evaluateVersionForApproval(versionId, false);
+      let reason = specValidation.reasons.join(" ");
+
+      if (approvalResult.decision !== "approved") {
+        reason += ` Version is not eligible for promotion because approval status is '${approvalResult.decision}'. Reason: ${approvalResult.reason}`;
+      }
+
       result = {
         versionId,
         targetEnvironment,
         allowed: false,
-        reason: `Version is not eligible for promotion because approval status is '${approvalResult.decision}'. Reason: ${approvalResult.reason}`,
-        approvalDecision: approvalResult.decision
-      };
-    } else if (targetEnvironment === "staging") {
-      result = {
-        versionId,
-        targetEnvironment,
-        allowed: true,
-        reason: "Version is approved and eligible for promotion to staging.",
-        approvalDecision: approvalResult.decision
-      };
-    } else if (targetEnvironment === "production") {
-      result = {
-        versionId,
-        targetEnvironment,
-        allowed: true,
-        reason: "Version is approved and eligible for promotion to production.",
+        reason,
         approvalDecision: approvalResult.decision
       };
     } else {
-      result = {
-        versionId,
-        targetEnvironment,
-        allowed: false,
-        reason: "Unknown promotion target.",
-        approvalDecision: approvalResult.decision
-      };
+      const approvalResult = evaluateVersionForApproval(versionId, logEvaluation);
+
+      if (approvalResult.decision !== "approved") {
+        result = {
+          versionId,
+          targetEnvironment,
+          allowed: false,
+          reason: `Version is not eligible for promotion because approval status is '${approvalResult.decision}'. Reason: ${approvalResult.reason}`,
+          approvalDecision: approvalResult.decision
+        };
+      } else if (targetEnvironment === "staging") {
+        result = {
+          versionId,
+          targetEnvironment,
+          allowed: true,
+          reason: "Version is approved and eligible for promotion to staging.",
+          approvalDecision: approvalResult.decision
+        };
+      } else if (targetEnvironment === "production") {
+        result = {
+          versionId,
+          targetEnvironment,
+          allowed: true,
+          reason: "Version is approved and eligible for promotion to production.",
+          approvalDecision: approvalResult.decision
+        };
+      } else {
+        result = {
+          versionId,
+          targetEnvironment,
+          allowed: false,
+          reason: "Unknown promotion target.",
+          approvalDecision: approvalResult.decision
+        };
+      }
     }
   }
 
@@ -116,7 +136,6 @@ export function performPromotion(
       toVersionId: versionId
     });
 
-    // Fire-and-forget webhook dispatch
     try {
       dispatchWebhookEvent("promotion_executed", auditEntry).catch((err) => {
         console.error("Webhook dispatch error (non-blocking):", err);
