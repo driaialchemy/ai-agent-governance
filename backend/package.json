@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "npx tsx src/test-governance.ts && npx tsx src/test-sdd.ts && npx tsx src/test-webhooks.ts"
+    "test": "npx tsx src/test-governance.ts && npx tsx src/test-sdd.ts && npx tsx src/test-demo-scenarios.ts && npx tsx src/test-webhooks.ts && npx tsx src/test-risk-governance.ts"
   },
   "keywords": [],
   "author": "",

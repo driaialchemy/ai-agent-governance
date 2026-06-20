@@ -50,6 +50,18 @@ import {
   handleInboundRollback,
   handleInboundApprovalCheck
 } from "./webhooks/inboundHandler";
+import { riskPolicies, getRiskPolicyById } from "./data/riskPolicies";
+import { logActivity, getActivityByAgent } from "./lib/activityLogger";
+import { validatePaths } from "./lib/pathValidator";
+import { validateTests } from "./lib/testValidator";
+import { generateRiskReport } from "./lib/riskReportGenerator";
+import {
+  createApprovalRequest,
+  approveRequest,
+  rejectRequest,
+  getApprovalRequest,
+  getPendingApprovals
+} from "./lib/approvalGate";
 
 const app = express();
 app.use(express.json());
@@ -674,6 +686,236 @@ app.post("/webhooks/actions/rollback", (req, res) => {
   res.json(result);
 });
 
-app.listen(3000, () => {
-  console.log("Server running on http://localhost:3000");
+// --- Risk Governance Endpoints ---
+
+app.get("/risk-policies", (_req, res) => {
+  res.json({
+    success: true,
+    data: riskPolicies
+  });
+});
+
+app.get("/risk-policies/:id", (req, res) => {
+  const policy = getRiskPolicyById(req.params.id);
+
+  if (!policy) {
+    res.status(404).json({
+      success: false,
+      message: "Policy not found"
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: policy
+  });
+});
+
+app.post("/agents/:id/activity", (req, res) => {
+  const { id: agentId } = req.params;
+  const activityData = req.body.activity ?? req.body;
+
+  if (!activityData?.actionType) {
+    res.status(400).json({
+      success: false,
+      message: "Activity required"
+    });
+    return;
+  }
+
+  const logged = logActivity({
+    ...activityData,
+    agentId: activityData.agentId || agentId,
+    versionId: activityData.versionId || "",
+    description: activityData.description || "",
+    evidence: activityData.evidence || { timestamp: new Date().toISOString() },
+    timestamp: activityData.timestamp || new Date().toISOString()
+  });
+
+  res.json({
+    success: true,
+    data: logged
+  });
+});
+
+app.get("/agents/:id/activity-report", (req, res) => {
+  const report = getActivityByAgent(req.params.id);
+  res.json({
+    success: true,
+    data: report
+  });
+});
+
+app.post("/agents/:id/assess-risks", (req, res) => {
+  const { policyId } = req.body;
+  const policy = getRiskPolicyById(policyId);
+
+  if (!policy) {
+    res.status(404).json({
+      success: false,
+      message: "Policy not found"
+    });
+    return;
+  }
+
+  const activityReport = getActivityByAgent(req.params.id);
+  const pathRisks = validatePaths(activityReport, policy);
+  const testRisks = validateTests(activityReport, policy);
+
+  res.json({
+    success: true,
+    data: {
+      pathRisks,
+      testRisks,
+      totalRisks: pathRisks.length + testRisks.length
+    }
+  });
+});
+
+app.post("/agents/:id/generate-report", (req, res) => {
+  const { policyId, versionId, approvalRequestId } = req.body;
+  const policy = getRiskPolicyById(policyId);
+
+  if (!policy) {
+    res.status(404).json({
+      success: false,
+      message: "Policy not found"
+    });
+    return;
+  }
+
+  const activityReport = getActivityByAgent(req.params.id);
+  const pathRisks = validatePaths(activityReport, policy);
+  const testRisks = validateTests(activityReport, policy);
+
+  let approvalRequest = approvalRequestId
+    ? getApprovalRequest(approvalRequestId) ?? null
+    : null;
+
+  const highCriticalRisks = [...pathRisks, ...testRisks]
+    .filter((r) => policy.requiresHumanApprovalFor.includes(r.riskLevel))
+    .map((r) => ({
+      id: r.riskId,
+      description: "category" in r ? `${r.category}: ${r.path || r.testName}` : r.riskId,
+      level: r.riskLevel
+    }));
+
+  if (!approvalRequest && highCriticalRisks.length > 0) {
+    approvalRequest = createApprovalRequest(
+      req.params.id,
+      versionId || activityReport.versionId,
+      highCriticalRisks,
+      policy
+    );
+  }
+
+  const report = generateRiskReport(
+    req.params.id,
+    versionId || activityReport.versionId,
+    activityReport,
+    pathRisks,
+    testRisks,
+    approvalRequest,
+    policy,
+    true
+  );
+
+  res.json({
+    success: true,
+    data: report
+  });
+});
+
+app.get("/approvals/pending", (_req, res) => {
+  const pending = getPendingApprovals();
+  res.json({
+    success: true,
+    data: pending
+  });
+});
+
+app.post("/approvals/request", (req, res) => {
+  const { agentId, versionId, risks, policyId } = req.body;
+  const policy = getRiskPolicyById(policyId);
+
+  if (!policy) {
+    res.status(404).json({
+      success: false,
+      message: "Policy not found"
+    });
+    return;
+  }
+
+  if (!agentId || !versionId || !risks) {
+    res.status(400).json({
+      success: false,
+      message: "Missing required fields: agentId, versionId, risks"
+    });
+    return;
+  }
+
+  const request = createApprovalRequest(agentId, versionId, risks, policy);
+  res.json({
+    success: true,
+    data: request
+  });
+});
+
+app.post("/approvals/:id/approve", (req, res) => {
+  const { approver, notes } = req.body;
+
+  if (!approver) {
+    res.status(400).json({
+      success: false,
+      message: "Approver required"
+    });
+    return;
+  }
+
+  try {
+    const request = approveRequest(req.params.id, approver, notes);
+    res.json({
+      success: true,
+      message: "Approval granted",
+      data: request
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Approval failed"
+    });
+  }
+});
+
+app.post("/approvals/:id/reject", (req, res) => {
+  const { approver, notes } = req.body;
+
+  if (!approver || !notes) {
+    res.status(400).json({
+      success: false,
+      message: "Approver and rejection notes required"
+    });
+    return;
+  }
+
+  try {
+    const request = rejectRequest(req.params.id, approver, notes);
+    res.json({
+      success: true,
+      message: "Approval rejected",
+      data: request
+    });
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Rejection failed"
+    });
+  }
+});
+
+const PORT = parseInt(process.env.PORT || "3000", 10);
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });

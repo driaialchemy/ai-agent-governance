@@ -15,6 +15,7 @@ This system provides a complete governance workflow for AI agents, including:
 - **Audit Trail** - Complete history of all governance actions
 - **Spec-Driven Governance** - Executable governance specs validate approval, promotion, and rollback
 - **REST API** - HTTP endpoints for all operations
+- **Agent Risk Governance** - Validates agent behavior against path, evidence, policy, approval, and test criteria before deployment
 
 ### Design Principles
 
@@ -94,7 +95,7 @@ Failed: 0
 ### Installation
 
 ```powershell
-cd C:\Users\msell\OneDrive\AIAlchemy\zapierbuild1\backend
+cd C:\Users\msell\OneDrive\AIAlchemy\aiagentgovernance\backend
 npm install
 ```
 
@@ -239,6 +240,21 @@ README.md                          # This file
 | GET | `/versions/:id/spec` | Get spec for a version |
 | GET | `/versions/:id/spec-validation` | Read-only spec validation result |
 
+### Risk Governance Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/risk-policies` | List all risk policies |
+| GET | `/risk-policies/:id` | Get a specific risk policy |
+| POST | `/agents/:id/activity` | Log agent activity (file access, tests, etc.) |
+| GET | `/agents/:id/activity-report` | Get activity summary for an agent |
+| POST | `/agents/:id/assess-risks` | Run path and test risk validation |
+| POST | `/agents/:id/generate-report` | Generate comprehensive risk report |
+| POST | `/approvals/request` | Create approval request for high/critical risks |
+| POST | `/approvals/:id/approve` | Approve a pending request |
+| POST | `/approvals/:id/reject` | Reject a pending request |
+| GET | `/approvals/pending` | List pending approval requests |
+
 ### Response Format
 
 **Success:**
@@ -370,6 +386,133 @@ If a spec is missing or invalid, approval is blocked with clear reasons. Promoti
 
 This remains a **local-first synthetic prototype** with in-memory data. The SDD layer provides **spec-driven validation** and an **auditable governance workflow** — it does not enforce production deployments on real external systems.
 
+## Agent Risk Governance
+
+The **Agent Risk Governance System** validates AI agent behavior against seven governance questions before recommending deployment:
+
+1. Did the agent stay inside permitted folders?
+2. Did the agent touch a restricted file?
+3. Did the agent cite evidence for every risk?
+4. Did the agent classify risk according to the policy?
+5. Did high-risk or critical actions require human approval?
+6. Did tests pass before the agent recommended deployment?
+7. Did the final report map findings back to the spec?
+
+### Risk governance quick start
+
+```powershell
+cd C:\Users\msell\OneDrive\AIAlchemy\aiagentgovernance\backend
+npm test
+npx tsx src/server.ts
+```
+
+### Risk governance API examples
+
+```powershell
+# List risk policies
+curl.exe http://localhost:3000/risk-policies
+
+# Log permitted file access
+curl.exe -X POST http://localhost:3000/agents/agent-001/activity `
+  -H "Content-Type: application/json" `
+  -d '{\"agentId\":\"agent-001\",\"versionId\":\"ver-001\",\"actionType\":\"file_access\",\"path\":\"/src/agent.ts\",\"accessType\":\"read\",\"description\":\"Agent read source file\",\"evidence\":{\"timestamp\":\"2026-06-20T10:00:00Z\"}}'
+
+# Log restricted file access (critical risk)
+curl.exe -X POST http://localhost:3000/agents/agent-001/activity `
+  -H "Content-Type: application/json" `
+  -d '{\"agentId\":\"agent-001\",\"versionId\":\"ver-001\",\"actionType\":\"file_access\",\"path\":\"/config/.env\",\"accessType\":\"read\",\"description\":\"Agent accessed .env\",\"evidence\":{\"timestamp\":\"2026-06-20T10:01:00Z\"}}'
+
+# Log passing test run
+curl.exe -X POST http://localhost:3000/agents/agent-001/activity `
+  -H "Content-Type: application/json" `
+  -d '{\"agentId\":\"agent-001\",\"versionId\":\"ver-001\",\"actionType\":\"test_run\",\"testName\":\"deployment_validation\",\"testPassed\":true,\"testOutput\":\"All assertions passed\",\"description\":\"Deployment test completed\",\"evidence\":{\"timestamp\":\"2026-06-20T10:02:00Z\"}}'
+
+# Get activity report
+curl.exe http://localhost:3000/agents/agent-001/activity-report
+
+# Assess risks
+curl.exe -X POST http://localhost:3000/agents/agent-001/assess-risks `
+  -H "Content-Type: application/json" `
+  -d '{\"policyId\":\"policy-001\"}'
+
+# Generate risk report
+curl.exe -X POST http://localhost:3000/agents/agent-001/generate-report `
+  -H "Content-Type: application/json" `
+  -d '{\"policyId\":\"policy-001\",\"versionId\":\"ver-001\"}'
+
+# Request approval for high-risk finding
+curl.exe -X POST http://localhost:3000/approvals/request `
+  -H "Content-Type: application/json" `
+  -d '{\"agentId\":\"agent-001\",\"versionId\":\"ver-001\",\"policyId\":\"policy-001\",\"risks\":[{\"id\":\"risk-1\",\"description\":\"Unauthorized .env access\",\"level\":\"critical\"}]}'
+
+# Approve request (replace APPROVAL_ID)
+curl.exe -X POST http://localhost:3000/approvals/APPROVAL_ID/approve `
+  -H "Content-Type: application/json" `
+  -d '{\"approver\":\"security-team@company.com\",\"notes\":\"Reviewed and approved\"}'
+
+# List pending approvals
+curl.exe http://localhost:3000/approvals/pending
+```
+
+## Demo Scenarios
+
+Synthetic agents and versions are set up so the Streamlit dashboard can demonstrate clear success and failure cases.
+
+### Repo Safety Scanner Agent (`agent-003`)
+
+| Version | Demo purpose |
+|---------|----------------|
+| `ver-101` | **Success path** — spec passes, approval succeeds, staging promotion allowed |
+| `ver-102` | **Spec failure** — prohibited capability `delete_files` |
+| `ver-103` | **Missing spec** — `missing_spec`, approval blocked |
+
+### Contract Risk Review Agent (`agent-004`)
+
+| Version | Demo purpose |
+|---------|----------------|
+| `ver-201` | **Valid version** — passes spec, benchmarks, policies; staging OK; production blocked by `humanApprovalRequired` |
+| `ver-202` | **Missing benchmarks** — `blocked_pending_remediation` |
+| `ver-203` | **Policy failure** — `rejected` |
+
+### Incident Triage Agent (`agent-005`)
+
+| Version | Demo purpose |
+|---------|----------------|
+| `ver-301` | **Classify-only** — approval succeeds |
+| `ver-302` | **Prior staging rule** — production promotion fails without prior staging deployment |
+| `ver-303` | **Prohibited capability** — spec fails on `change_permissions`; rollback denied by spec |
+
+### Legacy demo versions (still supported)
+
+| Version | Demo purpose |
+|---------|----------------|
+| `ver-002` | Spec validation passes; production requires prior staging |
+| `ver-004` | Missing governance spec |
+| `ver-003` | Rollback denied by spec |
+
+### Dashboard scenario mapping
+
+| Scenario | Try this version | Action |
+|----------|------------------|--------|
+| Spec validation passes | `ver-101` | Spec Validation → Validate Spec |
+| Spec fails (prohibited capability) | `ver-102` or `ver-303` | Spec Validation |
+| Missing spec | `ver-103` or `ver-004` | Spec Validation / Approval |
+| Approval succeeds | `ver-101` or `ver-301` | Approval Decision |
+| Approval blocked (missing benchmarks) | `ver-202` | Approval Decision |
+| Approval rejected (policy) | `ver-203` | Approval Decision |
+| Staging promotion succeeds | `ver-101` | Promotion Control → staging |
+| Production fails (prior staging) | `ver-302` | Promotion Control → production |
+| Production fails (human approval) | `ver-201` | Promotion Control → production |
+| Rollback succeeds | `ver-002` (production) | Rollback Control |
+| Rollback fails | `ver-103` or `ver-301` | Rollback Control |
+
+Run automated demo tests:
+
+```powershell
+cd backend
+npx tsx src/test-demo-scenarios.ts
+```
+
 ---
 
 ## 🔐 Governance Rules
@@ -479,4 +622,4 @@ ISC
 ---
 
 *Last Updated: 2026-06-20*
-*All tests passing | 56/56 assertions ✅*
+*All tests passing | 143/143 assertions ✅*

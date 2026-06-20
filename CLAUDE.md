@@ -67,6 +67,19 @@ The system supports a full governance workflow:
 - Rollback evaluation and execution
 - Audit logging for all governance actions
 - REST API endpoints
+- Agent Risk Governance (path, evidence, policy, approval, test validation)
+
+## Agent Risk Governance Rules
+
+When assessing agent behavior for deployment:
+
+- **Path validation** — Agents must stay within `permittedFolders`; restricted files and folders trigger risk findings
+- **Evidence requirements** — Every risk finding must cite `sourceFile`, `lineNumber`, and `auditEntryId` when the active policy requires them
+- **Policy classification** — Risk levels (`low`, `medium`, `high`, `critical`) are assigned per `RiskPolicySpec.riskClassification`
+- **Human approval** — High and critical risks require human approval before deployment can proceed
+- **Test gate** — Deployment is blocked when tests fail and the policy sets `blockIfTestsFail`
+- **Spec mapping** — Every finding in a risk report must include `specMapping` linking back to the policy clause
+- **Deployment recommendations** — Must cite test status, approval status, and spec mapping; `canDeploy` is false when tests fail, high/critical risks are unresolved, or approval is pending/rejected
 
 ## API Design Patterns
 
@@ -131,7 +144,7 @@ When completing tasks, always provide:
 
 Always provide exact commands:
 ```powershell
-cd C:\Users\msell\OneDrive\AIAlchemy\zapierbuild1\backend
+cd C:\Users\msell\OneDrive\AIAlchemy\aiagentgovernance\backend
 npx tsx src/server.ts
 ```
 
