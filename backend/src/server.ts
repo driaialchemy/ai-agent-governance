@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import { getDatabase } from "./db/database";
 import {
   getAllAgents,
   getAgentById,
@@ -60,8 +61,17 @@ import {
   approveRequest,
   rejectRequest,
   getApprovalRequest,
-  getPendingApprovals
+  getPendingApprovals,
+  getAllApprovals
 } from "./lib/approvalGate";
+import {
+  getRiskReport,
+  getRiskReportsByAgent,
+  getRiskReportsByVersion,
+  getAllRiskReports
+} from "./lib/riskReportGenerator";
+import { AuditTrailRepository } from "./db/repositories/AuditTrailRepository";
+import { registeredRepos, getRepoById, getAllRepos } from "./data/repoRegistry";
 
 const app = express();
 app.use(express.json());
@@ -70,6 +80,28 @@ app.get("/health", (_req, res) => {
   res.json({
     success: true,
     data: { status: "ok" }
+  });
+});
+
+// Repo Registry endpoints
+app.get("/repos", (_req, res) => {
+  res.json({
+    success: true,
+    data: getAllRepos()
+  });
+});
+
+app.get("/repos/:id", (req, res) => {
+  const repo = getRepoById(req.params.id);
+  if (!repo) {
+    return res.status(404).json({
+      success: false,
+      message: "Repository not found"
+    });
+  }
+  res.json({
+    success: true,
+    data: repo
   });
 });
 
@@ -797,7 +829,9 @@ app.post("/agents/:id/generate-report", (req, res) => {
     .filter((r) => policy.requiresHumanApprovalFor.includes(r.riskLevel))
     .map((r) => ({
       id: r.riskId,
-      description: "category" in r ? `${r.category}: ${r.path || r.testName}` : r.riskId,
+      description: "path" in r
+        ? `${r.category}: ${r.path}`
+        : `${r.category}: ${r.testName}`,
       level: r.riskLevel
     }));
 
@@ -913,6 +947,101 @@ app.post("/approvals/:id/reject", (req, res) => {
     });
   }
 });
+
+// Risk Report Retrieval endpoints
+app.get("/reports", (_req, res) => {
+  const reports = getAllRiskReports();
+  res.json({
+    success: true,
+    data: reports
+  });
+});
+
+app.get("/reports/:id", (req, res) => {
+  const report = getRiskReport(req.params.id);
+  if (!report) {
+    return res.status(404).json({
+      success: false,
+      message: "Risk report not found"
+    });
+  }
+  res.json({
+    success: true,
+    data: report
+  });
+});
+
+app.get("/agents/:id/reports", (req, res) => {
+  const reports = getRiskReportsByAgent(req.params.id);
+  res.json({
+    success: true,
+    data: reports
+  });
+});
+
+app.get("/versions/:id/reports", (req, res) => {
+  const reports = getRiskReportsByVersion(req.params.id);
+  res.json({
+    success: true,
+    data: reports
+  });
+});
+
+// Approval history endpoints
+app.get("/approvals", (_req, res) => {
+  const approvals = getAllApprovals();
+  res.json({
+    success: true,
+    data: approvals
+  });
+});
+
+app.get("/approvals/:id", (req, res) => {
+  const request = getApprovalRequest(req.params.id);
+  if (!request) {
+    return res.status(404).json({
+      success: false,
+      message: "Approval request not found"
+    });
+  }
+  res.json({
+    success: true,
+    data: request
+  });
+});
+
+// Audit trail endpoints
+const auditRepo = new AuditTrailRepository();
+
+app.get("/audit-trail", (req, res) => {
+  const limit = parseInt(req.query.limit as string) || 1000;
+  const entries = auditRepo.getAllAuditEntries(limit);
+  res.json({
+    success: true,
+    data: entries
+  });
+});
+
+app.get("/audit-trail/agent/:agentId", (req, res) => {
+  const limit = parseInt(req.query.limit as string) || 1000;
+  const entries = auditRepo.getAuditTrail(req.params.agentId, undefined, undefined, limit);
+  res.json({
+    success: true,
+    data: entries
+  });
+});
+
+app.get("/audit-trail/action/:actionType", (req, res) => {
+  const limit = parseInt(req.query.limit as string) || 1000;
+  const entries = auditRepo.getAuditTrail(undefined, undefined, req.params.actionType, limit);
+  res.json({
+    success: true,
+    data: entries
+  });
+});
+
+// Initialize database on startup
+getDatabase();
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 

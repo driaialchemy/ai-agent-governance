@@ -41,6 +41,14 @@ streamlit run app.py
 
 Streamlit opens in your browser (usually `http://localhost:8501`).
 
+**Port conflict?** If another Streamlit app is already running (for example a CUAD or other project on port 8501), use a different port:
+
+```powershell
+streamlit run app.py --server.port 8502
+```
+
+Then open `http://localhost:8502` in Chrome.
+
 ## Configure the API URL
 
 Use the sidebar **Backend base URL** field. Default: `http://localhost:3000`

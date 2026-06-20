@@ -16,12 +16,17 @@ DEFAULT_BASE_URL = "http://localhost:3000"
 REQUEST_TIMEOUT = 10
 
 # Known synthetic version IDs for demo scenarios
-VERSION_VALID_SPEC = "ver-002"
-VERSION_MISSING_SPEC = "ver-004"
-VERSION_STAGING_PROMOTION = "ver-002"
-VERSION_PRODUCTION_PRIOR_STAGING = "ver-002"
-VERSION_ROLLBACK_DENIED = "ver-003"
+VERSION_VALID_SPEC = "ver-101"
+VERSION_MISSING_SPEC = "ver-103"
+VERSION_PROHIBITED_CAPABILITY = "ver-102"
+VERSION_STAGING_PROMOTION = "ver-101"
+VERSION_PRODUCTION_PRIOR_STAGING = "ver-302"
+VERSION_HUMAN_APPROVAL_PRODUCTION = "ver-201"
+VERSION_BLOCKED_BENCHMARKS = "ver-202"
+VERSION_REJECTED_POLICY = "ver-203"
+VERSION_ROLLBACK_DENIED = "ver-303"
 VERSION_ROLLBACK_TARGET = "ver-002"
+VERSION_ROLLBACK_INVALID = "ver-103"
 
 
 # ---------------------------------------------------------------------------
@@ -212,12 +217,12 @@ def view_system_overview() -> None:
     st.write("Quick snapshot of backend health and governance state.")
 
     if st.button("Refresh system status", key="overview_refresh"):
-        st.session_state["overview_refresh"] = True
+        st.rerun()
 
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Check backend health", key="overview_health"):
-            st.session_state["overview_health"] = True
+            st.rerun()
 
     healthy, health_payload = check_health()
     if healthy:
@@ -619,7 +624,7 @@ def view_demo_scenarios() -> None:
             payload = show_response(response, "Scenario A")
             data = extract_data(payload) if isinstance(payload, dict) else None
             if isinstance(data, dict) and data.get("allowed"):
-                st.success("Expected: spec validation passes for ver-002.")
+                st.success(f"Expected: spec validation passes for {VERSION_VALID_SPEC}.")
 
     def scenario_b():
         response = api_get(f"/versions/{VERSION_MISSING_SPEC}/approval")
@@ -628,7 +633,7 @@ def view_demo_scenarios() -> None:
             data = extract_data(payload) if isinstance(payload, dict) else None
             if isinstance(data, dict):
                 if data.get("decision") == "blocked_pending_remediation":
-                    st.warning("Expected: missing spec blocks approval for ver-004.")
+                    st.warning(f"Expected: missing spec blocks approval for {VERSION_MISSING_SPEC}.")
                 else:
                     st.info(f"Decision was: {data.get('decision')}")
 
@@ -638,7 +643,7 @@ def view_demo_scenarios() -> None:
             payload = show_response(response, "Scenario C")
             data = extract_data(payload) if isinstance(payload, dict) else None
             if isinstance(data, dict) and data.get("allowed"):
-                st.success("Expected: staging promotion allowed for approved ver-002.")
+                st.success(f"Expected: staging promotion allowed for {VERSION_STAGING_PROMOTION}.")
 
     def scenario_d():
         response = api_get(f"/versions/{VERSION_PRODUCTION_PRIOR_STAGING}/promotion/production")
@@ -651,12 +656,15 @@ def view_demo_scenarios() -> None:
                     st.success("Denial reason mentions prior staging requirement.")
 
     def scenario_e():
-        response = api_get(f"/rollback/production/ver-004")
+        response = api_get(f"/rollback/production/{VERSION_ROLLBACK_INVALID}")
         if response:
             payload = show_response(response, "Scenario E")
             data = extract_data(payload) if isinstance(payload, dict) else None
             if isinstance(data, dict) and not data.get("allowed"):
-                st.error("Expected: rollback denied for ver-004 (not previously deployed).")
+                st.error(
+                    f"Expected: rollback denied for {VERSION_ROLLBACK_INVALID} "
+                    "(not previously deployed or missing spec)."
+                )
 
     def scenario_f():
         response = api_get(f"/rollback/production/{VERSION_ROLLBACK_TARGET}")
@@ -681,7 +689,7 @@ def view_demo_scenarios() -> None:
     st.divider()
     run_scenario(
         "Scenario B: Missing spec blocks approval",
-        f"Runs GET /versions/{VERSION_MISSING_SPEC}/approval — ver-004 has no governance spec.",
+        f"Runs GET /versions/{VERSION_MISSING_SPEC}/approval — no governance spec.",
         scenario_b,
     )
     st.divider()
@@ -699,7 +707,7 @@ def view_demo_scenarios() -> None:
     st.divider()
     run_scenario(
         "Scenario E: Rollback fails when target is invalid",
-        "Runs GET /rollback/production/ver-004 — ver-004 was never deployed to production.",
+        f"Runs GET /rollback/production/{VERSION_ROLLBACK_INVALID} — invalid rollback target.",
         scenario_e,
     )
     st.divider()
@@ -865,8 +873,7 @@ def main() -> None:
 
     with st.sidebar:
         st.header("Settings")
-        base_url = st.text_input("Backend base URL", value=DEFAULT_BASE_URL)
-        st.session_state["base_url"] = base_url
+        base_url = st.text_input("Backend base URL", value=DEFAULT_BASE_URL, key="base_url")
 
         st.divider()
         st.markdown("**Navigation**")

@@ -3,3 +3,6 @@ node_modules/
 ngrok*
 __pycache__/
 *.pyc
+backend/data/
+backend/*-output.txt
+backend/test-output.txt

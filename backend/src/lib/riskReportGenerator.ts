@@ -5,6 +5,7 @@ import { PathRisk } from "./pathValidator";
 import { TestRisk } from "./testValidator";
 import { RiskFinding, validateEvidence } from "./evidenceValidator";
 import { shouldBlockDeployment } from "./testValidator";
+import { RiskReportRepository, RiskReport as DbRiskReport } from "../db/repositories/RiskReportRepository";
 
 export type RiskReport = {
   id: string;
@@ -86,8 +87,8 @@ function buildFindingsFromRisks(
       riskLevel: risk.riskLevel,
       description,
       evidence: {
-        sourceFile: risk.evidence?.sourceFile,
-        lineNumber: risk.evidence?.lineNumber,
+        sourceFile: risk.evidence && "sourceFile" in risk.evidence ? risk.evidence.sourceFile : undefined,
+        lineNumber: risk.evidence && "lineNumber" in risk.evidence ? risk.evidence.lineNumber : undefined,
         auditEntryId: risk.evidence?.sourceActivity || "",
         timestamp: risk.evidence?.timestamp || new Date().toISOString()
       },
@@ -101,6 +102,36 @@ function buildFindingsFromRisks(
       }
     };
   });
+}
+
+const reportRepo = new RiskReportRepository();
+
+function toDbReport(report: RiskReport): DbRiskReport {
+  return {
+    id: report.id,
+    agent_id: report.agentId,
+    version_id: report.versionId,
+    policy_id: report.policyId,
+    generated_at: report.generatedAt,
+    summary: report.summary,
+    findings: report.findings,
+    approval: report.approval,
+    deploymentRecommendation: report.deploymentRecommendation,
+  };
+}
+
+function fromDbReport(report: DbRiskReport): RiskReport {
+  return {
+    id: report.id,
+    agentId: report.agent_id,
+    versionId: report.version_id,
+    policyId: report.policy_id,
+    generatedAt: report.generated_at,
+    summary: report.summary,
+    findings: report.findings,
+    approval: report.approval,
+    deploymentRecommendation: report.deploymentRecommendation,
+  };
 }
 
 export function generateRiskReport(
@@ -186,7 +217,7 @@ export function generateRiskReport(
     blockedBy.length === 0 &&
     (!approvalRequired || approvalRequest?.status === "approved");
 
-  return {
+  const report: RiskReport = {
     id: `report-${Date.now()}`,
     agentId,
     versionId,
@@ -220,4 +251,30 @@ export function generateRiskReport(
           : blockedBy.map((b) => `Resolve: ${b}`)
     }
   };
+
+  // Persist to database
+  reportRepo.saveReport(toDbReport(report));
+
+  return report;
+}
+
+export function getRiskReport(reportId: string): RiskReport | null {
+  const report = reportRepo.getRiskReport(reportId);
+  return report ? fromDbReport(report) : null;
+}
+
+export function getRiskReportsByAgent(agentId: string): RiskReport[] {
+  return reportRepo.getRiskReportsByAgent(agentId).map(fromDbReport);
+}
+
+export function getRiskReportsByVersion(versionId: string): RiskReport[] {
+  return reportRepo.getRiskReportsByVersion(versionId).map(fromDbReport);
+}
+
+export function getAllRiskReports(): RiskReport[] {
+  return reportRepo.getAllRiskReports().map(fromDbReport);
+}
+
+export function clearAllReports(): void {
+  reportRepo.clearAllReports();
 }

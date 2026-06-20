@@ -189,6 +189,12 @@ export function validateSpecForPromotion(
   }
 
   if (targetEnvironment === "production") {
+    if (spec.humanApprovalRequired) {
+      reasons.push(
+        "Production promotion denied because this spec requires human approval."
+      );
+    }
+
     if (spec.promotionRules.productionRequiresPriorStaging) {
       if (!wasVersionDeployedToStaging(versionId)) {
         reasons.push(

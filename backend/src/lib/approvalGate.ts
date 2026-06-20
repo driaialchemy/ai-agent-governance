@@ -1,9 +1,11 @@
 import { RiskLevel, RiskPolicySpec } from "../specs/riskPolicySpec";
+import { ApprovalRepository, ApprovalRequest as DbApprovalRequest } from "../db/repositories/ApprovalRepository";
 
 export type ApprovalRequest = {
   id: string;
   agentId: string;
   versionId: string;
+  policyId?: string;
   risks: {
     id: string;
     description: string;
@@ -15,7 +17,25 @@ export type ApprovalRequest = {
   notes?: string;
 };
 
-const approvalRequests: Map<string, ApprovalRequest> = new Map();
+const repo = new ApprovalRepository();
+
+function mapDbApproval(dbRequest: DbApprovalRequest): ApprovalRequest {
+  return {
+    id: dbRequest.id,
+    agentId: dbRequest.agent_id,
+    versionId: dbRequest.version_id,
+    policyId: dbRequest.policy_id,
+    risks: dbRequest.risks.map((risk) => ({
+      id: risk.id,
+      description: risk.description,
+      level: risk.level as RiskLevel,
+    })),
+    status: dbRequest.status,
+    approver: dbRequest.approver,
+    approvalTime: dbRequest.approval_time,
+    notes: dbRequest.notes,
+  };
+}
 
 export function createApprovalRequest(
   agentId: string,
@@ -25,16 +45,9 @@ export function createApprovalRequest(
 ): ApprovalRequest {
   const highRisks = risks.filter((r) => policy.requiresHumanApprovalFor.includes(r.level));
 
-  const request: ApprovalRequest = {
-    id: `approval-${Date.now()}`,
-    agentId,
-    versionId,
-    risks: highRisks,
-    status: "pending"
-  };
+  const dbRequest = repo.createApprovalRequest(agentId, versionId, policy.id, highRisks);
 
-  approvalRequests.set(request.id, request);
-  return request;
+  return mapDbApproval(dbRequest);
 }
 
 export function approveRequest(
@@ -42,17 +55,9 @@ export function approveRequest(
   approver: string,
   notes?: string
 ): ApprovalRequest {
-  const request = approvalRequests.get(requestId);
-  if (!request) {
-    throw new Error("Approval request not found");
-  }
+  const dbRequest = repo.approveRequest(requestId, approver, notes);
 
-  request.status = "approved";
-  request.approver = approver;
-  request.approvalTime = new Date().toISOString();
-  request.notes = notes;
-
-  return request;
+  return mapDbApproval(dbRequest);
 }
 
 export function rejectRequest(
@@ -60,27 +65,26 @@ export function rejectRequest(
   approver: string,
   notes: string
 ): ApprovalRequest {
-  const request = approvalRequests.get(requestId);
-  if (!request) {
-    throw new Error("Approval request not found");
-  }
+  const dbRequest = repo.rejectRequest(requestId, approver, notes);
 
-  request.status = "rejected";
-  request.approver = approver;
-  request.approvalTime = new Date().toISOString();
-  request.notes = notes;
-
-  return request;
+  return mapDbApproval(dbRequest);
 }
 
 export function getApprovalRequest(requestId: string): ApprovalRequest | undefined {
-  return approvalRequests.get(requestId);
+  const dbRequest = repo.getApprovalRequest(requestId);
+  if (!dbRequest) return undefined;
+
+  return mapDbApproval(dbRequest);
 }
 
 export function getPendingApprovals(): ApprovalRequest[] {
-  return Array.from(approvalRequests.values()).filter((r) => r.status === "pending");
+  return repo.getPendingApprovals().map(mapDbApproval);
+}
+
+export function getAllApprovals(): ApprovalRequest[] {
+  return repo.getAllApprovals().map(mapDbApproval);
 }
 
 export function clearApprovalRequests(): void {
-  approvalRequests.clear();
+  repo.clearAllApprovals();
 }
