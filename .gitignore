@@ -6,3 +6,5 @@ __pycache__/
 backend/data/
 backend/*-output.txt
 backend/test-output.txt
+**/.env
+backend/.env
