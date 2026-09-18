@@ -8,3 +8,4 @@ backend/*-output.txt
 backend/test-output.txt
 **/.env
 backend/.env
+.env.*

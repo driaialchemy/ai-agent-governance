@@ -171,3 +171,25 @@ Not vague instructions like "start the server".
 - No Zapier integration unless explicitly requested
 - No authentication unless explicitly requested
 - Keep everything in-memory and synthetic for now
+
+## Audit Remediation Notes
+
+- Audit path: $AuditFile
+- Risk level from audit: $risk.
+- Addressed audit issues: External AI API usage: openai — API key management required.; Credential pattern indicators in code: api_key; External database terms detected (postgres) — potential data compliance risk.; Risk level is HIGH, expected LOW.; Dependency manifests present: requirements.txt, package.json; HTTP networking libraries in use: requests
+
+
+## AI Provider Boundary
+
+AI providers detected by audit: openai. Use providers only for the repository's documented workflow. API keys must be supplied through environment variables or managed platform secrets, never committed or echoed. Do not add redundant providers without human approval.
+
+
+## Database Compliance Boundary
+
+Database terms detected by audit: postgres. Treat database integrations as compliance-sensitive. Confirm connection strings are environment-driven, avoid production credentials, and get human approval before changing schemas, migrations, retention, or production data access.
+
+
+## Human Review Required
+
+This audit classified the repo as HIGH risk. Agents may draft governance/documentation updates, but credential, provider, database, deployment, and data-export remediation requires human review before code or data changes.
+

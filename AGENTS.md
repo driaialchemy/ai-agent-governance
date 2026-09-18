@@ -46,3 +46,16 @@ If you find a committed `.env`, private key, or live credential: **stop**, repor
 ```bash
 echo 'Do not run agents here until HIGH-REPOS.md step 1 is done.'
 ```
+
+# Audit remediation metadata
+audit_path: audit/multi_repo/2026-09-18/repo_ai-agent-governance_20260918T004837Z.json
+risk_level: HIGH
+human_review_required: true
+audit_findings:
+  - "External AI API usage: openai — API key management required."
+  - "Credential pattern indicators in code: api_key"
+  - "External database terms detected (postgres) — potential data compliance risk."
+  - "Risk level is HIGH, expected LOW."
+  - "Dependency manifests present: requirements.txt, package.json"
+  - "HTTP networking libraries in use: requests"
+
