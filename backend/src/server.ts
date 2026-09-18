@@ -1,12 +1,15 @@
 import "dotenv/config";
 import express from "express";
+import fs from "fs";
+import path from "path";
 import { getDatabase } from "./db/database";
 import {
   getAllAgents,
   getAgentById,
   getAllAgentVersions,
   getVersionsByAgentId,
-  getVersionById
+  getVersionById,
+  updateVersionTaxonomy
 } from "./lib/registryLookup";
 import {
   getBenchmarkResultsByVersionId,
@@ -32,6 +35,12 @@ import {
   getAllAuditLogEntries,
   getAuditLogEntriesByVersionId
 } from "./auditLog";
+import { buildDecisionInventory } from "./lib/decisionInventory";
+import {
+  getRecordedSampleCount,
+  getUncertaintyFlags,
+  recordConfidence
+} from "./lib/uncertaintyMonitor";
 import {
   getAllGovernanceSpecs,
   getGovernanceSpecById,
@@ -53,6 +62,7 @@ import {
 } from "./webhooks/inboundHandler";
 import { riskPolicies, getRiskPolicyById } from "./data/riskPolicies";
 import { logActivity, getActivityByAgent } from "./lib/activityLogger";
+import { writeAgentAuditDocument, getAgentAuditLogDir } from "./lib/agentAuditFileWriter";
 import { validatePaths } from "./lib/pathValidator";
 import { validateTests } from "./lib/testValidator";
 import { generateRiskReport } from "./lib/riskReportGenerator";
@@ -72,9 +82,53 @@ import {
 } from "./lib/riskReportGenerator";
 import { AuditTrailRepository } from "./db/repositories/AuditTrailRepository";
 import { registeredRepos, getRepoById, getAllRepos } from "./data/repoRegistry";
+import { evaluateActivityForBlocking } from "./lib/blockingEvaluator";
+import { EscalationRepository } from "./db/repositories/EscalationRepository";
+import { alertOps } from "./lib/alertOps";
+
+function resolveGovernancereposDir(): string {
+  const candidates = [
+    path.resolve(__dirname, "../../../governancerepos"),
+    path.resolve(__dirname, "../../../../governancerepos"),
+    path.resolve(process.cwd(), "governancerepos"),
+    path.resolve(process.cwd(), "../governancerepos"),
+    path.resolve(process.cwd(), "../../governancerepos"),
+  ];
+
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, "live-monitor.html"))) {
+      return dir;
+    }
+  }
+
+  return candidates[0];
+}
+
+const dashboardDir = resolveGovernancereposDir();
 
 const app = express();
 app.use(express.json());
+
+// CORS middleware
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+// Serve static files (HTML dashboards)
+app.use(express.static(dashboardDir));
+
+const dashboardFiles = ["live-monitor.html", "test-harness.html", "simple-test.html"] as const;
+for (const file of dashboardFiles) {
+  app.get(`/${file}`, (_req, res) => {
+    res.sendFile(path.join(dashboardDir, file));
+  });
+}
 
 app.get("/health", (_req, res) => {
   res.json({
@@ -175,6 +229,36 @@ app.get("/versions/:versionId", (req, res) => {
   res.json({
     success: true,
     data: version
+  });
+});
+
+app.patch("/versions/:versionId/taxonomy", (req, res) => {
+  const { versionId } = req.params;
+  const body = req.body ?? {};
+  const axes: {
+    risk?: string | null;
+    complexity?: string | null;
+    regulatory_impact?: string | null;
+    business_importance?: string | null;
+  } = {};
+  if ("risk" in body) axes.risk = body.risk ?? null;
+  if ("complexity" in body) axes.complexity = body.complexity ?? null;
+  if ("regulatory_impact" in body) axes.regulatory_impact = body.regulatory_impact ?? null;
+  if ("business_importance" in body) axes.business_importance = body.business_importance ?? null;
+
+  const updated = updateVersionTaxonomy(versionId, axes);
+
+  if (!updated) {
+    res.status(404).json({
+      success: false,
+      message: `Version with ID '${versionId}' not found.`
+    });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: updated
   });
 });
 
@@ -529,6 +613,22 @@ app.get("/audit-log/version/:versionId", (req, res) => {
   });
 });
 
+app.get("/decision-inventory", (_req, res) => {
+  res.json({
+    success: true,
+    data: buildDecisionInventory()
+  });
+});
+
+app.get("/uncertainty-flags", (_req, res) => {
+  const sampleCount = getRecordedSampleCount();
+  res.json({
+    success: true,
+    data: getUncertaintyFlags(),
+    inert: sampleCount === 0
+  });
+});
+
 // --- Webhook Management Endpoints ---
 
 app.get("/webhooks", (_req, res) => {
@@ -756,18 +856,79 @@ app.post("/agents/:id/activity", (req, res) => {
     return;
   }
 
-  const logged = logActivity({
+  const incomingConfidence = activityData.confidence ?? req.body?.confidence;
+  const normalizedActivity = {
     ...activityData,
     agentId: activityData.agentId || agentId,
     versionId: activityData.versionId || "",
     description: activityData.description || "",
     evidence: activityData.evidence || { timestamp: new Date().toISOString() },
-    timestamp: activityData.timestamp || new Date().toISOString()
+    timestamp: activityData.timestamp || new Date().toISOString(),
+    confidence: typeof incomingConfidence === "number" ? incomingConfidence : incomingConfidence ?? null
+  };
+
+  const logged = logActivity({
+    ...normalizedActivity,
+    actionType: normalizedActivity.actionType as any
   });
+
+  if (typeof normalizedActivity.confidence === "number") {
+    recordConfidence(
+      normalizedActivity.agentId,
+      normalizedActivity.confidence,
+      normalizedActivity.timestamp
+    );
+  }
+
+  const decision = evaluateActivityForBlocking(normalizedActivity);
+  let escalationId = decision.escalationId;
+
+  if (!decision.allowed) {
+    const escalation = escalationRepo.create({
+      timestamp: new Date().toISOString(),
+      agentId: normalizedActivity.agentId,
+      violation: decision.violation || "Governance violation",
+      violatedPolicy: decision.violatedPolicy || "policy-001",
+      severity: "critical",
+      status: "pending_review"
+    });
+    escalationId = escalation.id;
+
+    alertOps({
+      channel: "governance-violations",
+      message: `Violation for ${normalizedActivity.agentId}: ${decision.violation} (${escalation.id})`
+    }).catch((err) => console.error("Alert failed:", err));
+  }
+
+  try {
+    const auditPath = writeAgentAuditDocument({
+      activityId: logged.id,
+      agentId: normalizedActivity.agentId,
+      actionType: normalizedActivity.actionType,
+      timestamp: normalizedActivity.timestamp,
+      description: normalizedActivity.description,
+      activity: logged as unknown as Record<string, unknown>,
+      allowed: decision.allowed,
+      violation: decision.violation,
+      violatedPolicy: decision.violatedPolicy,
+      escalationId
+    });
+    console.log(`Audit log written: ${auditPath}`);
+  } catch (err) {
+    console.error("Failed to write agent audit log:", err);
+  }
 
   res.json({
     success: true,
-    data: logged
+    data: logged,
+    allowed: decision.allowed,
+    violation: decision.violation,
+    violatedPolicy: decision.violatedPolicy,
+    escalationId,
+    timestamp: new Date().toISOString(),
+    actionRequired: decision.allowed
+      ? undefined
+      : "Contact ops for manual override or fix the violation"
   });
 });
 
@@ -1012,6 +1173,7 @@ app.get("/approvals/:id", (req, res) => {
 
 // Audit trail endpoints
 const auditRepo = new AuditTrailRepository();
+const escalationRepo = new EscalationRepository();
 
 app.get("/audit-trail", (req, res) => {
   const limit = parseInt(req.query.limit as string) || 1000;
@@ -1040,6 +1202,39 @@ app.get("/audit-trail/action/:actionType", (req, res) => {
   });
 });
 
+// Escalation endpoints
+app.get("/escalations", (_req, res) => {
+  res.json({
+    success: true,
+    data: escalationRepo.getPending()
+  });
+});
+
+app.get("/escalations/:id", (req, res) => {
+  const escalation = escalationRepo.getById(req.params.id);
+  if (!escalation) {
+    return res.status(404).json({ success: false, message: "Escalation not found" });
+  }
+  res.json({ success: true, data: escalation });
+});
+
+app.post("/escalations/:id/override", (req, res) => {
+  const { approvedBy, reason } = req.body;
+  const escalation = escalationRepo.getById(req.params.id);
+
+  if (!escalation) {
+    return res.status(404).json({ success: false, message: "Escalation not found" });
+  }
+
+  escalation.status = "overridden";
+  escalation.approvedBy = approvedBy;
+  escalation.overriddenReason = reason;
+  escalation.overriddenAt = new Date().toISOString();
+  escalationRepo.update(escalation);
+
+  res.json({ success: true, data: escalation });
+});
+
 // Initialize database on startup
 getDatabase();
 
@@ -1047,4 +1242,7 @@ const PORT = parseInt(process.env.PORT || "3000", 10);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Dashboards served from: ${dashboardDir}`);
+  console.log(`Live monitor: http://localhost:${PORT}/live-monitor.html`);
+  console.log(`Agent audit logs: ${getAgentAuditLogDir()}`);
 });

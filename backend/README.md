@@ -84,6 +84,7 @@ This runs both test suites:
 | GET | `/agents/:agentId/versions` | List versions for an agent |
 | GET | `/versions` | List all agent versions |
 | GET | `/versions/:versionId` | Get version details |
+| PATCH | `/versions/:versionId/taxonomy` | Set decision-taxonomy axes on a registry version |
 
 ### Benchmark Endpoints
 
@@ -126,6 +127,8 @@ This runs both test suites:
 |--------|------|-------------|
 | GET | `/audit-log` | Get all audit log entries |
 | GET | `/audit-log/version/:versionId` | Get audit log entries for a specific version |
+| GET | `/decision-inventory` | Read-only classify view over registry approval/promotion decisions |
+| GET | `/uncertainty-flags` | Confidence-window flags; empty/inert until activity includes confidence |
 
 ### Webhook Management Endpoints
 

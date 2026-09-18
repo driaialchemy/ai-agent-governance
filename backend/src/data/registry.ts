@@ -9,6 +9,13 @@ export type Agent = {
   createdAt: string;
 };
 
+export type DecisionTaxonomyAxes = {
+  risk?: string | null;
+  complexity?: string | null;
+  regulatory_impact?: string | null;
+  business_importance?: string | null;
+};
+
 export type AgentVersion = {
   id: string;
   agentId: string;
@@ -17,6 +24,10 @@ export type AgentVersion = {
   promptVersion: string;
   createdAt: string;
   approved: boolean;
+  risk?: string | null;
+  complexity?: string | null;
+  regulatory_impact?: string | null;
+  business_importance?: string | null;
 };
 
 export const agents: Agent[] = [

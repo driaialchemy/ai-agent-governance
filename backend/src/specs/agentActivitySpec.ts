@@ -27,6 +27,9 @@ export type AgentActivity = {
     lineNumber?: number;
     timestamp: string;
   };
+  reasoning_path?: string[] | null;
+  policy_matched?: string | null;
+  confidence?: number | null;
 };
 
 export type AgentActivityReport = {

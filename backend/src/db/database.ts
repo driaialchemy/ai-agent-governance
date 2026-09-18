@@ -10,6 +10,7 @@ interface DatabaseStore {
   risk_reports: any[];
   approval_requests: any[];
   audit_trail: any[];
+  escalations: any[];
 }
 
 let store: DatabaseStore | null = null;
@@ -46,7 +47,8 @@ function initializeDatabase(): DatabaseStore {
     agent_activities: [],
     risk_reports: [],
     approval_requests: [],
-    audit_trail: []
+    audit_trail: [],
+    escalations: []
   };
 
   persistDatabase();
@@ -73,7 +75,8 @@ export function resetDatabase() {
     agent_activities: [],
     risk_reports: [],
     approval_requests: [],
-    audit_trail: []
+    audit_trail: [],
+    escalations: []
   };
   persistDatabase();
 }

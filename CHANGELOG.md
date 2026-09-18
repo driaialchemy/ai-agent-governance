@@ -1,0 +1,4 @@
+- P2/P4: TRUST.md maps registry/policy/benchmarks/promotion; GET /decision-inventory exports automated/human/shared/unclassified decisions from registry state.
+- POST /agents/:id/activity now explicitly persists `confidence` (from activity or top-level body); numeric values feed GET /uncertainty-flags.
+- Uncertainty monitor: GET /uncertainty-flags tracks rolling confidence (inert until activity logs confidence).
+- Registry versions accept optional taxonomy axes; PATCH /versions/:id/taxonomy writes them for decision-inventory.

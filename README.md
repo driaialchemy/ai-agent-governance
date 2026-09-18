@@ -212,6 +212,7 @@ README.md                          # This file
 | GET | `/agents/:id/versions` | Get versions for agent |
 | GET | `/versions` | List all versions |
 | GET | `/versions/:id` | Get specific version |
+| PATCH | `/versions/:id/taxonomy` | Set risk/complexity/regulatory_impact/business_importance |
 
 ### Data Endpoints
 
@@ -230,6 +231,8 @@ README.md                          # This file
 | GET | `/deployments` | Current deployment state |
 | GET | `/audit-log` | All audit entries |
 | GET | `/audit-log/version/:id` | Audit entries for version |
+| GET | `/decision-inventory` | Classify registry decisions as automated/human/shared/unclassified |
+| GET | `/uncertainty-flags` | Rolling-window confidence flags (inert until lineage confidence is logged) |
 
 ### Spec Endpoints
 
